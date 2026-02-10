@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<title>FM 廣播電臺</title>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+<style>
+/* ===== 基本 ===== */
+body {
+    margin: 0;
+    background: #000;
+    color: #fff;
+    font-family: -apple-system, BlinkMacSystemFont,
+                 "Segoe UI", "Microsoft JhengHei", sans-serif;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* ===== 電台列（你原來的設定） ===== */
+#station-list {
+    padding: 12px 16px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    border-bottom: 1px solid #111;
+    flex: 1 1 160vh;
+    max-height: 165vh;
+    min-height: 180px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: #444 #222;
+}
+#station-list::-webkit-scrollbar {
+    width: 6px;
+}
+#station-list::-webkit-scrollbar-track {
+    background: #111;
+}
+#station-list::-webkit-scrollbar-thumb {
+    background: #444;
+    border-radius: 3px;
+}
+#station-list::-webkit-scrollbar-thumb:hover {
+    background: #666;
+}
+
+/* 電台按鈕 */
+.station-btn {
+    background: #111;
+    color: #ccc;
+    border: 1px solid #333;
+    border-radius: 999px;
+    padding: 10px 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 0 0 calc(16.6% - 8px);
+    max-width: calc(16.6% - 8px);
+    white-space: nowrap;
+    overflow: hidden;
+}
+.station-btn:hover {
+    background: #1a1a1a;
+    color: #fff;
+}
+.station-btn.active {
+    background: transparent;
+    color: #d4af37;
+    border: 1.5px solid #d4af37;
+    box-shadow: 0 0 0 1px rgba(212,175,55,0.15), inset 0 0 12px rgba(212,175,55,0.08);
+}
+.station-btn .meta {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.station-btn .heart {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 18px;
+    color: #666;
+}
+.station-btn .heart.active {
+    color: #ff4d4d;
+}
+
+/* ===== 播放區（你原來的設定） ===== */
+#display-area {
+    flex: 0 0 5vh;
+    min-height: 130px;
+    max-height: 10vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 8px 0;
+    margin-top: 100px;
+    box-sizing: border-box;
+}
+.now-playing {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+.np-icon {
+    font-size: 28px;
+}
+.np-title {
+    font-size: 1.3rem;
+    letter-spacing: 0.6px;
+}
+.np-sub {
+    font-size: 0.68rem;
+    color: #aaa;
+    letter-spacing: 1.2px;
+}
+
+/* 白色播放器膠囊 */
+.player-pill {
+    background: #fff;
+    border-radius: 999px;
+    padding: 8px 16px;
+    width: 100%;
+    max-width: 320px;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.6), inset 0 0 0 1px rgba(0,0,0,0.08);
+}
+
+/* Audio 控制 */
+audio {
+    width: 100%;
+    height: 34px;
+}
+audio::-webkit-media-controls-panel {
+    background: transparent;
+}
+audio::-webkit-media-controls-play-button,
+audio::-webkit-media-controls-pause-button {
+    filter: invert(0) !important;
+    opacity: 0.9;
+}
+audio::-webkit-media-controls-current-time-display,
+audio::-webkit-media-controls-time-remaining-display {
+    color: #000;
+    font-size: 0.75rem;
+}
+audio::-webkit-media-controls-timeline {
+    height: 5px;
+    border-radius: 99px;
+    background: #ddd;
+}
+audio::-webkit-media-controls-timeline::-webkit-media-slider-thumb {
+    background: #000;
+    width: 14px;
+    height: 14px;
+}
+</style>
+</head>
+<body>
+
+<div id="station-list"></div>
+<div id="display-area">
+    <div class="now-playing">
+        <div class="np-icon">🎵</div>
+        <div>
+            <div class="np-title" id="station-name">請選擇電台</div>
+            <div class="np-sub">LIVE RADIO</div>
+        </div>
+    </div>
+    <div class="player-pill">
+        <audio id="audio" controls crossorigin="anonymous"></audio>
+    </div>
+</div>
+
+<script>
+const audio = document.getElementById("audio");
+const stationNameDisp = document.getElementById("station-name");
+const stationListEl = document.getElementById("station-list");
+let hls;
+let favorites = new Set(JSON.parse(localStorage.getItem("radio_favs") || "[]"));
+
+// ── 容易維護的電台清單（可直接在此區塊新增/修改） ──
+const stationsText = `
+江蘇經典流行音樂廣播,http://lzlive.vojs.cn/2wtSfrS/92/live.m3u8
+亞太之聲 (純音樂),https://stream.rcs.revma.com/kydend74hv8uv
+80後音樂|1.31,http://stream3.hndt.com/now/SFZeH2cb/playlist.m3u8
+A-line Radio 網路音樂台,http://radio.apple-line.com:987/radio-data/alinePlayer.php
+AsiaFM HD音樂台,http://asiafm.hk:8000/asiahd
+AsiaFM 亞洲天空台,http://funradio.cn:8000/funradio
+AsiaFM 亞洲音樂台,http://asiafm.hk:8000/asiafm
+AsiaFM 亞洲粵語台,https://live.ximalaya.com/radio-first-page-app/live/999/64.m3u8?transcode=ts
+AsiaFM 亞洲經典台,http://goldfm.cn:8000/goldfm
+AsiaFM 亞洲熱歌台,http://live.ximalaya.com/radio-first-page-app/live/1908/64.m3u8?transcode=ts
+AsiaFM96.5成都,http://asiafm.vip:8000/fm965
+AsiaFM96.5成都,http://asiafm.vip:8000/live965
+AsiaFM亞太電臺,http://stream.rcs.revma.com/kydend74hv8uv
+AsiaFM亞洲電臺,http://stream.rcs.revma.com/xpgtqc74hv8uv
+BravoFM臺北都會音樂台,https://onair.bravo913.com.tw:9130/live.mp3
+CCTV15音樂|0.91,https://piccpndali.v.myalicdn.com/audio/cctv15_2.m3u8
+CityFM台南知音,http://fm971.cityfm.tw:8080/971.mp3
+CityFM城市廣播,http://fm929.cityfm.tw:8080/929.mp3
+CityFM臺北健康,http://fm901.cityfm.tw:8080/901.mp3
+FlyRadio飛揚調頻,http://stream.rcs.revma.com/e0tdah74hv8uv
+HitFM 聯播網,https://stream.rcs.revma.com/ypqt40u0x1zuv
+KISS RADIO 大眾,https://stream.rcs.revma.com/hls/kiss_radio/main/index.m3u8
+M-Radio全國廣播,http://stream.rcs.revma.com/044q61ha7a0uv
+M-Radio全國廣播,http://stream.rcs.revma.com/044q61ha7a0uv/hls.m3u8
+News98新聞台,http://n12.rcs.revma.com/55tyxsy4qtzuv
+News98新聞台,http://stream.rcs.revma.com/55tyxsy4qtzuv
+POP Radio FM91.7,https://stream.rcs.revma.com/hls/pop_radio/main/index.m3u8
+RTI中央廣播電臺,https://streamak0138.akamaized.net/live0138lh-mbm9/_definst_/rti3/playlist.m3u8
+RTI亞洲語言Live,https://streamak0138.akamaized.net/live0138lh-mbm9/_definst_/rti5/chunklist.m3u8
+RTI閩客粵語和歐美外語Live,https://streamak0138.akamaized.net/live0138lh-mbm9/_definst_/rti6/playlist.m3u8
+中廣流行網,http://n14.rcs.revma.com/aw9uqyxy2tzuv
+中廣流行網,http://stream.rcs.revma.com/aw9uqyxy2tzuv
+中廣音樂網 iRadio,http://stream.rcs.revma.com/ks4vsmg3qtzuv
+中廣音樂網,http://stream.rcs.revma.com/ks4vsmg3qtzuv
+中廣新聞網,http://n12.rcs.revma.com/78fm9wyy2tzuv
+中廣新聞網,http://stream.rcs.revma.com/78fm9wyy2tzuv
+太陽電臺,http://211.20.119.102:8081
+心靈音樂館|1.25,http://play-radio-stream3.hndt.com/now/AFqvb0VX/playlist.m3u8
+古典音樂台 FM97.7,https://onair.family977.com.tw:8977/live.mp3
+台中古典音樂台,https://onair.family977.com.tw:8977/live.mp3
+台中廣播電臺,http://211.20.119.101:8081
+正義電臺,http://211.20.119.103:8081
+正聲FM104.1,http://flv.ccdntech.com/live/_definst_/mp4:vod117_Live/live1/playlist.m3u8
+正聲綜合,http://flv.ccdntech.com/live/_definst_/mp4:vod117_Live/live2/playlist.m3u8
+民謠音樂|1.22,http://stream3.hndt.com/now/DTK5qc83/playlist.m3u8
+全國治安交通網,http://stream.pbs.gov.tw:1935/live/mp3:PBS/playlist.m3u8
+老歌音樂台|0.69,http://live.xmcdn.com:80/live/2628/64.m3u8
+私房音樂|2.78,http://livestream.1766.today:1769/live1.mp3
+亞洲經典音樂台|1.11,http://live.xmcdn.com:80/live/1005/64.m3u8
+河北汽車音樂台|1.89,https://radio.pull.hebtv.com/live/hebqcyy.m3u8
+飛特電臺,https://phate.io/listen.ogg
+飛碟電臺,http://n08.rcs.revma.com/em90w4aeewzuv
+飛碟電臺,http://stream.rcs.revma.com/em90w4aeewzuv
+格萊美音樂|0.99,http://stream3.hndt.com/now/yorSd1X2/playlist.m3u8
+高清音樂台|1.02,http://live.xmcdn.com:80/live/1427/64.m3u8
+動感音樂|1.64,http://stream3.hndt.com/now/ufjjbZxV/playlist.m3u8
+國立教育廣播電台臺北總台AM台,https://cast.ner.gov.tw/2
+國立教育廣播電台臺北總台FM台,https://cast.ner.gov.tw/1
+清晨音樂台|0.75,http://live.xmcdn.com:80/live/1011/64.m3u8
+湖南音樂之聲·芒果音樂台,http://a.live.hnradio.com/yypd/radio120k_yypd.m3u8?auth_key=1588751172-0-0-d97b858279c1c86650172b9913ea4af2
+經典合集,http://vodcdn.video.taobao.com/oss/ali-video/fe68ff471420aaefcb3a7f4f413ad3f4/video.m3u8
+經典合集2,http://vodcdn.video.taobao.com/oss/ali-video/f2b27944f9960f3dbb2c6dd6c4679747/video.m3u8
+遊戲音樂vgmradio|6.94,http://radio.vgmradio.com:8040/stream
+臺灣古典音樂台,http://59.120.88.155:8000/live.mp3
+輕鬆電台FM 96.9,http://stream.rcs.revma.com/k41z6wadu5hvv
+潮流音樂|1.58,http://play-radio-stream3.hndt.com/now/Or5au0KN/playlist.m3u8
+環宇廣播,http://stream.rcs.revma.com/srn5f9kmwxhvv
+懷集音樂台|0.70,http://live.xmcdn.com:80/live/966/64.m3u8
+懷舊合集,http://vodcdn.video.taobao.com/oss/ali-video/8f45a35108ebe1b1951d2936007e3cd0/video.m3u8
+懷舊音樂,http://vodcdn.video.taobao.com/oss/ali-video/84722d96b62883dafdcc154afbf0bb03/video.m3u8
+寶島聯播網|大千電台,http://125.227.87.206:8000/FM99.1
+寶島聯播網|主人電台,http://125.227.87.206:8000/FM96.9
+寶島聯播網|寶島新聲,http://125.227.87.206:8000/FM98.5
+警廣之聲,http://play-radio-stream3.hndt.com/now/prIgXGFo/playlist.m3u8
+
+`.trim();
+
+// 自動解析成 [[名稱, 網址], ...] 格式
+const stations = stationsText
+  .split('\n')
+  .map(line => line.trim())
+  .filter(line => line && !line.startsWith('//'))
+  .map(line => {
+    const parts = line.split(',');
+    const name = parts[0].trim();
+    const url = parts.slice(1).join(',').trim(); // 防止網址內有逗號被切壞
+    return [name, url];
+  });
+
+function playStation(name, url, btn) {
+    stationNameDisp.textContent = name;
+    document.querySelectorAll(".station-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    audio.pause();
+    if (hls) hls.destroy();
+    if (url.includes(".m3u8")) {
+        if (Hls.isSupported()) {
+            hls = new Hls();
+            hls.loadSource(url);
+            hls.attachMedia(audio);
+            hls.on(Hls.Events.MANIFEST_PARSED, () => {
+                audio.play().catch(() => {});
+            });
+        } else {
+            audio.src = url;
+        }
+    } else {
+        audio.src = url;
+    }
+    audio.play().catch(() => {});
+}
+
+function renderList() {
+    stationListEl.innerHTML = "";
+    const buttons = [];
+
+    stations.forEach(([name, url]) => {
+        const btn = document.createElement("button");
+        btn.className = "station-btn";
+        btn.dataset.name = name;
+        btn.onclick = () => playStation(name, url, btn);
+
+        const meta = document.createElement("span");
+        meta.className = "meta";
+        meta.textContent = name;
+
+        const heart = document.createElement("button");
+        heart.className = "heart";
+        heart.textContent = favorites.has(name) ? "❤️" : "🤍";
+        if (favorites.has(name)) heart.classList.add("active");
+
+        heart.onclick = e => {
+            e.stopPropagation();
+            if (favorites.has(name)) {
+                favorites.delete(name);
+                heart.textContent = "🤍";
+                heart.classList.remove("active");
+            } else {
+                favorites.add(name);
+                heart.textContent = "❤️";
+                heart.classList.add("active");
+            }
+            localStorage.setItem("radio_favs", JSON.stringify([...favorites]));
+        };
+
+        btn.append(meta, heart);
+        stationListEl.appendChild(btn);
+        buttons.push({ btn, name, url });
+    });
+
+    // 自動選中並載入第一個紅心（或第一個）電台
+    setTimeout(() => {
+        let targetBtn = null;
+
+        for (let item of buttons) {
+            if (favorites.has(item.name)) {
+                targetBtn = item.btn;
+                break;
+            }
+        }
+
+        if (!targetBtn && buttons.length > 0) {
+            targetBtn = buttons[0].btn;
+        }
+
+        if (targetBtn) {
+            targetBtn.click();
+        }
+    }, 500);
+}
+
+renderList();
+</script>
+</body>
+</html>
