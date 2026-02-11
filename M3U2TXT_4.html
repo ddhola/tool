@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<title>IPTV M3U ⇄ TXT 雙向轉換工具</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+body {
+  font-family: system-ui, -apple-system, sans-serif;
+  background: #f4f6f8;
+  margin: 0;
+  padding: 20px;
+}
+.container {
+  max-width: 1000px;
+  margin: auto;
+}
+h1 {
+  text-align: center;
+  color: #2c3e50;
+}
+.drop-zone {
+  border: 3px dashed #aaa;
+  border-radius: 12px;
+  padding: 50px;
+  background: white;
+  text-align: center;
+  cursor: pointer;
+  transition: 0.2s;
+}
+.drop-zone.dragover {
+  border-color: #3498db;
+  background: #eaf4ff;
+}
+textarea {
+  width: 100%;
+  min-height: 260px;
+  margin-top: 15px;
+  padding: 12px;
+  font-family: Consolas, monospace;
+  font-size: 14px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+}
+button {
+  padding: 10px 18px;
+  margin: 10px 6px 0 0;
+  border: none;
+  border-radius: 6px;
+  color: white;
+  cursor: pointer;
+}
+.btn-main { background: #3498db; }
+.btn-paste { background: #8e44ad; }
+.btn-copy { background: #27ae60; }
+.btn-clear { background: #e74c3c; }
+#status {
+  text-align: center;
+  color: #e67e22;
+  font-weight: bold;
+  min-height: 1.4em;
+  margin: 10px 0;
+}
+.info {
+  text-align: center;
+  color: #7f8c8d;
+  margin-top: 15px;
+}
+</style>
+</head>
+<body>
+<div class="container">
+<h1>IPTV M3U ⇄ TXT 雙向轉換</h1>
+<div class="drop-zone" id="dropZone">
+  拖放多個 .m3u / .m3u8 / .txt 到這裡<br>
+  或點擊選擇檔案
+  <input type="file" id="fileInput" multiple hidden>
+</div>
+<div>
+  <button class="btn-main" onclick="fileInput.click()">選擇檔案</button>
+  <button class="btn-paste" onclick="pasteFromClipboard()">從剪貼簿貼上</button>
+  <button class="btn-copy" onclick="copyResult()">複製結果</button>
+  <button class="btn-main" onclick="downloadM3U()">⬇ 下載 M3U</button>
+  <button class="btn-main" onclick="downloadTXT()">⬇ 下載 TXT</button>
+  <button class="btn-clear" onclick="clearAll()">清除</button>
+</div>
+
+<div id="status"></div>
+
+<textarea id="input" placeholder="讀取的原始內容（多檔會合併）\n也可以直接貼上內容，會自動轉換"></textarea>
+<textarea id="output" placeholder="轉換結果"></textarea>
+
+<div class="info">
+自動判斷格式｜原始順序｜TXT 分類 ↔ M3U group-title｜群組名自動加到標題（避免重複）｜支援 https
+</div>
+</div>
+
+<script>
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const input = document.getElementById('input');
+const output = document.getElementById('output');
+const status = document.getElementById('status');
+
+/* ---------- 拖放 ---------- */
+['dragenter','dragover'].forEach(e =>
+  dropZone.addEventListener(e, ev => {
+    ev.preventDefault();
+    dropZone.classList.add('dragover');
+  })
+);
+['dragleave','drop'].forEach(e =>
+  dropZone.addEventListener(e, ev => {
+    ev.preventDefault();
+    dropZone.classList.remove('dragover');
+  })
+);
+dropZone.onclick = () => fileInput.click();
+dropZone.ondrop = e => {
+  handleFiles(e.dataTransfer.files);
+};
+fileInput.onchange = e => {
+  handleFiles(e.target.files);
+};
+
+/* ---------- 從剪貼簿貼上 ---------- */
+async function pasteFromClipboard() {
+  try {
+    const text = await navigator.clipboard.readText();
+    if (text.trim()) {
+      input.value = text.trim();
+      status.textContent = "已貼上內容，正在自動轉換...";
+      convert();
+      setTimeout(() => { status.textContent = ""; }, 3000);
+    } else {
+      status.textContent = "剪貼簿無內容";
+    }
+  } catch (err) {
+    status.textContent = "無法讀取剪貼簿";
+  }
+}
+
+/* ---------- 多檔處理 + 簡單進度 ---------- */
+function handleFiles(fileList) {
+  if (!fileList || fileList.length === 0) return;
+  const files = Array.from(fileList);
+  input.value = '';
+  output.value = '';
+  let index = 0;
+
+  function readNext() {
+    if (index >= files.length) {
+      status.textContent = `已讀取 ${files.length} 個檔案，正在轉換...`;
+      convert();
+      setTimeout(() => { status.textContent = ""; }, 3000);
+      return;
+    }
+
+    const file = files[index++];
+    status.textContent = `正在讀取 (${index}/${files.length}) ...`;
+
+    const reader = new FileReader();
+    reader.onload = e => {
+      input.value += e.target.result.trim() + '\n\n';
+      readNext();
+    };
+    reader.readAsText(file, 'UTF-8');
+  }
+
+  readNext();
+}
+
+/* ---------- 自動轉換 ---------- */
+function convert() {
+  const text = input.value.trim();
+  if (!text) return;
+
+  // 強化判斷：支援 https，且更寬鬆偵測 M3U
+  const isM3U = text.startsWith('#EXTM3U') || 
+                text.includes('#EXTINF') || 
+                (text.includes('://') && text.includes('#EXTINF'));
+
+  if (isM3U) {
+    output.value = m3uToTxt(text);
+    status.textContent = "已轉換為 TXT 格式";
+  } else {
+    output.value = txtToM3U(text);
+    status.textContent = "已轉換為 M3U 格式";
+  }
+
+  setTimeout(() => { status.textContent = ""; }, 4000);
+}
+
+/* ---------- M3U → TXT （支援 https） ---------- */
+function m3uToTxt(text) {
+  const lines = text.split(/\r?\n/);
+  const out = [];
+  const printed = new Set();
+  let title = null, group = null;
+
+  for (let line of lines) {
+    line = line.trim();
+    if (!line) continue;
+    if (line.startsWith('#EXTINF')) {
+      const g = line.match(/group-title="([^"]+)"/i);
+      group = g ? g[1].trim() : '未分類';
+      title = (line.split(',').pop() || '無標題').trim();
+      if (!title.startsWith(group + "_")) {
+        title = `${group}_${title}`;
+      }
+      if (!printed.has(group)) {
+        out.push(`${group},#genre#`);
+        printed.add(group);
+      }
+    } else if (line.includes('://')) {  // 改成 includes('://') 支援 https / rtmp 等
+      if (title) out.push(`${title},${line}`);
+    }
+  }
+  return out.join('\n');
+}
+
+/* ---------- TXT → M3U （改用最後一個逗號分割，防網址內有逗號） ---------- */
+function txtToM3U(text) {
+  const lines = text.split(/\r?\n/);
+  const out = ['#EXTM3U'];
+  let group = '未分類';
+
+  for (let line of lines) {
+    line = line.trim();
+    if (!line) continue;
+    if (line.endsWith(',#genre#')) {
+      group = line.replace(',#genre#','').trim() || '未分類';
+      continue;
+    }
+    // 使用最後一個逗號分割（更穩健）
+    const lastCommaIndex = line.lastIndexOf(',');
+    if (lastCommaIndex === -1) continue;
+    
+    const titlePart = line.substring(0, lastCommaIndex).trim();
+    const urlPart = line.substring(lastCommaIndex + 1).trim();
+
+    if (urlPart.includes('://')) {
+      let title = titlePart;
+      if (!title.startsWith(group + "_")) {
+        title = `${group}_${title}`;
+      }
+      out.push(
+        `#EXTINF:-1 group-title="${group}",${title}`,
+        urlPart
+      );
+    }
+  }
+  return out.join('\n');
+}
+
+/* ---------- 工具 ---------- */
+function getTimestamp() {
+  const d = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  return (
+    d.getFullYear() +
+    pad(d.getMonth()+1) +
+    pad(d.getDate()) + '_' +
+    pad(d.getHours()) +
+    pad(d.getMinutes()) +
+    pad(d.getSeconds())
+  );
+}
+
+function downloadFile(content, filename) {
+  const blob = new Blob([content], { type: 'text/plain;charset=utf-8;' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function downloadM3U() {
+  let text = output.value.trim();
+  if (!text) return alert('沒有內容');
+  if (!text.startsWith('#EXTM3U')) text = txtToM3U(text);
+  downloadFile(text, `iptv_${getTimestamp()}.m3u`);
+}
+
+function downloadTXT() {
+  let text = output.value.trim();
+  if (!text) return alert('沒有內容');
+  if (text.startsWith('#EXTM3U')) text = m3uToTxt(text);
+  downloadFile(text, `iptv_${getTimestamp()}.txt`);
+}
+
+function copyResult() {
+  output.select();
+  document.execCommand('copy');
+  status.textContent = "已複製結果";
+  setTimeout(() => { status.textContent = ""; }, 2500);
+}
+
+/* ---------- 清除 ---------- */
+function clearAll() {
+  input.value = '';
+  output.value = '';
+  fileInput.value = '';
+  status.textContent = "已清除";
+  setTimeout(() => { status.textContent = ""; }, 2000);
+}
+</script>
+</body>
+</html>
