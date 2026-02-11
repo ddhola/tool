@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>本地網頁版猜數字遊戲</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            background-color: #f0f8ff;
+        }
+
+        #game-container {
+            background-color: #ffffff;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            max-width: 400px;
+            width: 100%;
+            text-align: center;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        #input-area {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            justify-content: center;
+        }
+
+        #guess-input {
+            padding: 10px;
+            font-size: 1.2em;
+            width: 120px;
+            text-align: center;
+            border: 2px solid #ccc;
+            border-radius: 5px;
+            transition: border-color 0.3s;
+        }
+
+        #guess-input:focus {
+            border-color: #007bff;
+            outline: none;
+        }
+
+        #submit-button, #reset-button {
+            padding: 10px 15px;
+            font-size: 1.1em;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        #submit-button {
+            background-color: #007bff;
+            color: white;
+        }
+
+        #submit-button:hover {
+            background-color: #0056b3;
+        }
+
+        #reset-button {
+            background-color: #dc3545;
+            color: white;
+            margin-top: 15px;
+        }
+
+        #reset-button:hover {
+            background-color: #c82333;
+        }
+
+        #history {
+            list-style: none;
+            padding: 0;
+            max-height: 250px;
+            overflow-y: auto;
+            margin-top: 20px;
+            border-top: 1px solid #eee;
+        }
+
+        .history-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+            font-size: 1.1em;
+        }
+
+        .guess-number {
+            font-weight: bold;
+            color: #444;
+        }
+
+        .result {
+            font-weight: bold;
+        }
+
+        .win {
+            color: #28a745;
+            font-size: 1.2em;
+        }
+
+        .info-message {
+            margin-bottom: 15px;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <h1>猜數字遊戲 (4A4B)</h1>
+        <p class="info-message">電腦已生成一個 4 位不重複的數字，請猜測！</p>
+        
+        <div id="input-area">
+            <input type="text" id="guess-input" maxlength="4" placeholder="輸入四位數字">
+            <button id="submit-button" onclick="checkGuess()">猜測</button>
+        </div>
+
+        <p id="message"></p>
+
+        <h2>猜測紀錄</h2>
+        <ul id="history"></ul>
+
+        <button id="reset-button" onclick="startGame()">重新開始</button>
+    </div>
+
+<script>
+    let secretNumber = '';
+    let attempts = 0;
+
+    const HISTORY_LIST = document.getElementById('history');
+    const MESSAGE_EL = document.getElementById('message');
+    const INPUT_EL = document.getElementById('guess-input');
+    const SUBMIT_BUTTON = document.getElementById('submit-button');
+
+    function generateSecretNumber() {
+        const digits = [0,1,2,3,4,5,6,7,8,9];
+        for (let i = digits.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [digits[i], digits[j]] = [digits[j], digits[i]];
+        }
+        return digits.slice(0, 4).join('');
+    }
+
+    function validateGuess(guess) {
+        if (guess.length !== 4) {
+            setMessage('請輸入 4 位數。', 'red');
+            return false;
+        }
+        if (!/^\d{4}$/.test(guess)) {
+            setMessage('請輸入純數字。', 'red');
+            return false;
+        }
+        if (new Set(guess.split('')).size !== 4) {
+            setMessage('請輸入不重複的 4 位數字。', 'red');
+            return false;
+        }
+        return true;
+    }
+
+    function calculateResult(guess) {
+        let A = 0, B = 0;
+        for (let i = 0; i < 4; i++) {
+            if (guess[i] === secretNumber[i]) A++;
+            else if (secretNumber.includes(guess[i])) B++;
+        }
+        return { A, B };
+    }
+
+    function checkGuess() {
+        const guess = INPUT_EL.value.trim();
+        if (!validateGuess(guess)) return;
+
+        attempts++;
+        const { A, B } = calculateResult(guess);
+        const resultText = `${A} A ${B} B`;
+
+        displayHistory(guess, resultText);
+
+        if (A === 4) {
+            setMessage(`🎉 恭喜！您在第 ${attempts} 次猜中了！密碼是 ${secretNumber}。`, 'win');
+            endGame();
+        } else {
+            setMessage(`結果：${resultText}`);
+        }
+
+        INPUT_EL.value = '';
+        INPUT_EL.focus();
+    }
+
+    window.checkGuess = checkGuess;
+    window.startGame = startGame;
+
+    function setMessage(text, type='') {
+        MESSAGE_EL.textContent = text;
+        MESSAGE_EL.className = type ? `result ${type}` : 'result';
+    }
+
+    function displayHistory(guess, result) {
+        const li = document.createElement('li');
+        li.className = 'history-item';
+        li.innerHTML = `
+            <span>第 ${attempts} 次:</span>
+            <span class="guess-number">${guess}</span>
+            <span class="result ${result.includes('4 A') ? 'win' : ''}">${result}</span>
+        `;
+        HISTORY_LIST.prepend(li);
+    }
+
+    function endGame() {
+        INPUT_EL.disabled = true;
+        SUBMIT_BUTTON.disabled = true;
+    }
+
+    function startGame() {
+        secretNumber = generateSecretNumber();
+        attempts = 0;
+        HISTORY_LIST.innerHTML = '';
+        MESSAGE_EL.textContent = '';
+        INPUT_EL.value = '';
+        INPUT_EL.disabled = false;
+        SUBMIT_BUTTON.disabled = false;
+        INPUT_EL.focus();
+    }
+
+    INPUT_EL.addEventListener('keydown', e => {
+        if (e.key === 'Enter') checkGuess();
+    });
+
+    window.onload = startGame;
+</script>
+
+</body>
+</html>

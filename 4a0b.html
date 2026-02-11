@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<title>幾A幾B 猜數字遊戲</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<style>
+  body {
+    font-family: "Microsoft JhengHei", "Arial", sans-serif;
+    background: linear-gradient(135deg, #ff9a9e, #fad0c4);
+    margin: 0;
+    padding: 20px;
+    min-height: 100vh;
+    color: #333;
+  }
+  .container {
+    max-width: 500px;
+    margin: 20px auto;
+    background: rgba(255,255,255,255,0.95);
+    border-radius: 20px;
+    padding: 30px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+  }
+  h1 {
+    text-align: center;
+    color: #e91c73d;
+    margin-bottom: 10px;
+  }
+  .info {
+    text-align: center;
+    font-size: 18px;
+    margin-bottom: 20px;
+    color: #666;
+  }
+  input {
+    font-size: 32px;
+    width: 100%;
+    padding: 15px;
+    text-align: center;
+    letter-spacing: 15px;
+    border: 3px solid #91c73d;
+    border-radius: 15px;
+    margin: 20px 0;
+  }
+  button {
+    width: 100%;
+    padding: 15px;
+    font-size: 20px;
+    background: #91c73d;
+    color: white;
+    border: none;
+    border-radius: 15px;
+    cursor: pointer;
+  }
+  button:hover { background: #7ab027; }
+  .history {
+    margin-top: 30px;
+    max-height: 300px;
+    overflow-y: auto;
+    padding: 10px;
+    background: #f8f8f8;
+    border-radius: 10px;
+  }
+  .item {
+    padding: 8px 0;
+    border-bottom: 1px solid #eee;
+    font-size: 18px;
+  }
+  .win {
+    color: #e91e63;
+    font-size: 28px;
+    font-weight: bold;
+    text-align: center;
+    margin: 20px 0;
+  }
+  #restartBtn {
+    display: none;
+    background: #ff5722;
+    margin-top: 20px;
+  }
+  #restartBtn:hover { background: #e64a19; }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <h1>幾A幾B 猜數字</h1>
+  <div class="info">請輸入 4 個不重複的數字</div>
+
+  <input type="text" id="input" maxlength="4" placeholder="????">
+  <button onclick="guess()">送出猜測</button>
+
+  <div id="result"></div>
+
+  <div class="history" id="history"></div>
+
+  <button id="restartBtn" onclick="newGame()">再玩一局！</button>
+</div>
+
+<script>
+// 全域變數
+let answer = "";
+let historyCount = 0;
+
+const inputEl = document.getElementById('input');
+const resultEl = document.getElementById('result');
+const historyEl = document.getElementById('history');
+const restartBtn = document.getElementById('restartBtn');
+
+// 產生不重複的4位答案
+function generateAnswer() {
+  let arr = [0,1,2,3,4,5,6,7,8,9];
+  let result = [];
+  for(let i=0; i<4; i++){
+    let idx = Math.floor(Math.random() * arr.length);
+    result.push(arr[idx]);
+    arr.splice(idx, 1); // 移除已選數字
+  }
+  return result.join('');
+}
+
+// 開始新遊戲
+function newGame() {
+  answer = generateAnswer();
+  historyCount = 0;
+  resultEl.innerHTML = '';
+  historyEl.innerHTML = '';
+  inputEl.value = '';
+  restartBtn.style.display = 'none';
+  inputEl.focus();
+  console.log("答案：", answer); // 作弊模式，正式玩可以刪掉這行
+}
+
+// 檢查猜測
+function guess() {
+  let guess = inputEl.value.trim();
+
+  // 輸入驗證
+  if(guess.length !== 4) {
+    resultEl.innerHTML = '<span style="color:red">請輸入正好 4 位數字！</span>';
+    return;
+  }
+  if(!/^\d{4}$/.test(guess)) {
+    resultEl.innerHTML = '<span style="color:red">只能輸入數字！</span>';
+    return;
+  }
+  if(new Set(guess).size !== 4) {
+    resultEl.innerHTML = '<span style="color:red">數字不能重複！</span>';
+    return;
+  }
+
+  historyCount++;
+  let a = 0, b = 0;
+  for(let i=0; i<4; i++) {
+    if(guess[i] === answer[i]) {
+      a++;
+    } else if(answer.includes(guess[i])) {
+      b++;
+    }
+  }
+
+  // 顯示本次結果
+  let item = document.createElement('div');
+  item.className = 'item';
+  item.innerHTML = `<strong>第${historyCount}次：</strong> ${guess} → <span style="color:#91c73d">${a}A${b}B</span>`;
+  historyEl.prepend(item); // 最新猜測放最上面
+
+  if(a === 4) {
+    resultEl.innerHTML = `<div class="win">恭喜猜對了！答案就是 ${answer}</div>
+                          <div style="font-size:20px">共用了 ${historyCount} 次</div>`;
+    restartBtn.style.display = 'block';
+    inputEl.disabled = true;
+  } else {
+    resultEl.innerHTML = `<span style="font-size:24px">${a}A${b}B</span>`;
+  }
+
+  inputEl.value = '';
+  inputEl.focus();
+}
+
+// 按 Enter 也可以送出
+inputEl.addEventListener('keypress', function(e) {
+  if(e.key === 'Enter') guess();
+});
+
+// 遊戲開始
+newGame();
+</script>
+
+</body>
+</html>

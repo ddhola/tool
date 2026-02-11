@@ -1,0 +1,283 @@
+
+
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>記憶翻牌小遊戲3</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: 'Arial', sans-serif; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: center; 
+            align-items: center; 
+            min-height: 100vh; /* 使用 min-height 增強兼容性 */
+            color: white; 
+            touch-action: manipulation;
+            user-select: none;
+            padding: 10px; /* 增加邊距防止貼邊 */
+        }
+        canvas { 
+            border: 5px solid rgba(255,255,255,0.3); 
+            border-radius: 20px; 
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3); 
+            max-width: 95vw; 
+            max-height: 80vh; /* 稍微放寬限制 */
+            background: rgba(255,255,255,0.1);
+            margin: 10px 0;
+        }
+        .info { 
+            text-align: center; margin: 10px 0; 
+            font-size: 18px; font-weight: bold; 
+        }
+        .restart { 
+            padding: 15px 30px; font-size: 20px; 
+            background: #ff6b6b; color: white; 
+            border: none; border-radius: 50px; 
+            cursor: pointer; box-shadow: 0 10px 20px rgba(0,0,0,0.2); 
+            transition: transform 0.2s; 
+        }
+        .restart:active { transform: scale(0.95); }
+        .win { 
+            position: fixed; top: 50%; left: 50%; 
+            transform: translate(-50%, -50%); 
+            background: rgba(0,0,0,0.8); color: gold; 
+            padding: 40px; border-radius: 20px; 
+            text-align: center; font-size: 24px; 
+            display: none; 
+            z-index: 1000;
+        }
+    </style>
+</head>
+<body>
+    <div class="info">
+        分數: <span id="score">0</span> | 時間: <span id="time">0</span>s
+    </div>
+    <canvas id="gameCanvas" width="400" height="400"></canvas>
+    <button class="restart" onclick="restartGame()">重新開始</button>
+    
+    <div class="win" id="winMsg">
+        🎉 通關啦！<br>
+        最終分數: <span id="finalScore">0</span><br>
+        用時: <span id="finalTime">0</span>s
+        <br><br>
+        <button onclick="restartGame()" style="margin-top:20px; font-size:18px;">再玩一次</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const gridSize = 4;
+        const patterns = ['🍎', '🍌', '🍇', '🍓', '🍊', '🍉', '🥝', '🍍'];
+
+        let currentCardSize; // 追蹤卡片大小
+        let cards = [];
+        let flipped = [];
+        let matched = 0;
+        let score = 0;
+        let startTime = Date.now();
+        let gameTimer;
+        let isProcessingFlip = false; // 鎖定點擊，避免快速點擊造成錯誤
+
+        // =======================================================
+        // 核心邏輯函數
+        // =======================================================
+
+        function initCards() {
+            clearInterval(gameTimer); // 確保停止舊計時器
+            cards = [];
+            const pairs = [...patterns, ...patterns];
+            pairs.sort(() => Math.random() - 0.5); 
+            for (let i = 0; i < gridSize * gridSize; i++) {
+                cards.push({ pattern: pairs[i], flipped: false, matched: false });
+            }
+            flipped = [];
+            matched = 0;
+            score = 0;
+            startTime = Date.now();
+            updateScore();
+            startTimer();
+        }
+
+        function drawCard(x, y, card) {
+            if (!currentCardSize) return; // 安全檢查
+            ctx.save();
+            ctx.translate(x + currentCardSize/2, y + currentCardSize/2);
+            
+            const size = currentCardSize;
+
+            if (card.matched) {
+                ctx.globalAlpha = 0.5;
+                ctx.font = `${size * 0.6}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.fillText(card.pattern, 0, size * 0.2); // 根據卡片大小調整文字位置
+            } else if (card.flipped) {
+                ctx.fillStyle = '#4ecdc4';
+                ctx.shadowColor = 'rgba(0,0,0,0.5)';
+                ctx.shadowBlur = 10;
+                ctx.fillRect(-size/2, -size/2, size, size);
+                ctx.shadowBlur = 0;
+                ctx.fillStyle = 'white';
+                ctx.font = `bold ${size * 0.6}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.fillText(card.pattern, 0, size * 0.2);
+            } else {
+                // 背面
+                const gradient = ctx.createLinearGradient(0, -size/2, 0, size/2);
+                gradient.addColorStop(0, '#ff9a9e');
+                gradient.addColorStop(1, '#fecfef');
+                ctx.fillStyle = gradient;
+                ctx.fillRect(-size/2, -size/2, size, size);
+                ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+                ctx.lineWidth = 5;
+                ctx.strokeRect(-size/2 + 2, -size/2 + 2, size - 4, size - 4);
+                
+                ctx.fillStyle = 'rgba(255,255,255,0.4)';
+                ctx.beginPath();
+                ctx.arc(-size * 0.2, -size * 0.2, size * 0.3, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            ctx.restore();
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            for (let i = 0; i < gridSize; i++) {
+                for (let j = 0; j < gridSize; j++) {
+                    const idx = i * gridSize + j;
+                    // 使用 currentCardSize
+                    drawCard(j * currentCardSize, i * currentCardSize, cards[idx]);
+                }
+            }
+        }
+
+        function flipCard(index) {
+            if (isProcessingFlip) return; // 鎖定
+            const card = cards[index];
+            if (flipped.length < 2 && !card.flipped && !card.matched) {
+                card.flipped = true;
+                flipped.push(index);
+                draw();
+
+                if (flipped.length === 2) {
+                    isProcessingFlip = true; // 鎖定點擊
+                    setTimeout(checkMatch, 800);
+                }
+            }
+        }
+
+        function checkMatch() {
+            const [idx1, idx2] = flipped;
+            if (cards[idx1].pattern === cards[idx2].pattern) {
+                cards[idx1].matched = true;
+                cards[idx2].matched = true;
+                matched++;
+                score += 10;
+                updateScore();
+                if (matched === patterns.length) {
+                    clearInterval(gameTimer);
+                    document.getElementById('finalScore').textContent = score;
+                    document.getElementById('finalTime').textContent = Math.floor((Date.now() - startTime) / 1000);
+                    document.getElementById('winMsg').style.display = 'block';
+                }
+            } else {
+                cards[idx1].flipped = false;
+                cards[idx2].flipped = false;
+            }
+            flipped = [];
+            isProcessingFlip = false; // 解鎖
+            draw();
+        }
+
+        function updateScore() {
+            document.getElementById('score').textContent = score;
+        }
+
+        function startTimer() {
+            startTime = Date.now();
+            gameTimer = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                document.getElementById('time').textContent = elapsed;
+            }, 1000);
+        }
+
+        // =======================================================
+        // 介面與事件處理
+        // =======================================================
+
+        function getIndex(clientX, clientY) {
+            const rect = canvas.getBoundingClientRect();
+            const x = clientX - rect.left;
+            const y = clientY - rect.top;
+            
+            // 檢查 currentCardSize 是否有效
+            if (!currentCardSize || currentCardSize <= 0) return -1; 
+            
+            const col = Math.floor(x / currentCardSize);
+            const row = Math.floor(y / currentCardSize);
+            if (col >= 0 && col < gridSize && row >= 0 && row < gridSize) {
+                return row * gridSize + col;
+            }
+            return -1;
+        }
+
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const idx = getIndex(touch.clientX, touch.clientY);
+            if (idx !== -1) flipCard(idx);
+        }, { passive: false });
+
+        canvas.addEventListener('click', (e) => {
+            const idx = getIndex(e.clientX, e.clientY);
+            if (idx !== -1) flipCard(idx);
+        });
+
+        // 重新開始 (設為全域函數以供 HTML 按鈕調用)
+        window.restartGame = function() {
+            document.getElementById('winMsg').style.display = 'none';
+            clearInterval(gameTimer);
+            initCards();
+            draw();
+        }
+
+        // 自適應畫布大小 - **確保顯示的核心函數**
+        function resizeCanvas() {
+            // 這是關鍵修正：計算畫布大小時，要從 viewport 中減去資訊列和按鈕所佔的垂直空間
+            const availableHeight = window.innerHeight * 0.95 - 150; // 減去約 150px 給上方的分數和下方的按鈕
+            const availableWidth = window.innerWidth * 0.95; 
+
+            // 使用較短的可用邊作為畫布的正方形尺寸
+            const size = Math.min(availableWidth, availableHeight);
+            
+            // 確保 size 不為負或零
+            if (size > 100) { 
+                canvas.width = size;
+                canvas.height = size;
+                
+                currentCardSize = canvas.width / gridSize; 
+                
+                // 重新初始化和繪製，但只在畫布尺寸改變時
+                if (cards.length === 0 || matched === patterns.length) {
+                     initCards();
+                }
+                draw();
+            } else {
+                 // 尺寸過小，不做初始化，可能提示用戶旋轉螢幕
+                 console.log("Canvas 尺寸過小，無法初始化。");
+            }
+        }
+
+        // =======================================================
+        // 啟動點
+        // =======================================================
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas(); // 初始調整並啟動遊戲
+
+    </script>
+</body>
+</html>
