@@ -148,7 +148,7 @@ let isLocalMode = false;
 async function init() {
     try {
         // 使用 GitHub Raw 絕對路徑避免路徑偏移
-        const rawUrl = "https://raw.githubusercontent.com/ddhola/tool/refs/heads/main/F%EF%BC%AD.txt";
+        const rawUrl = "https://raw.githubusercontent.com/ddhola/tool/refs/heads/main/FM.txt";
         
         // 加上 timestamp (?t=...) 強制跳過瀏覽器快取
         const response = await fetch(`${rawUrl}?t=${Date.now()}`);
@@ -331,4 +331,5 @@ init();
 </script>
 </body>
 </html>
+
 
