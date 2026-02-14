@@ -179,18 +179,21 @@ document.addEventListener('keydown', (e) => {
 });
 
 // 3. 核心功能：從 GitHub 讀取清單
+// 將原有的 init 函式替換為這個版本
 async function init() {
     try {
-        // 使用 fetch 讀取同目錄下的 FM_list.txt
-        // 加上 timestamp 防止瀏覽器快取舊清單
-        const response = await fetch(`FM_list.txt?t=${Date.now()}`);
-        if (!response.ok) throw new Error("無法載入清單檔案");
+        // 使用 GitHub Raw 的絕對路徑，確保檔案一定能被抓到
+        // 網址格式：https://raw.githubusercontent.com/使用者名稱/儲存庫/分支/檔案名稱
+        const rawUrl = "https://raw.githubusercontent.com/ddhola/tool/main/FM_list.txt";
+        
+        const response = await fetch(`${rawUrl}?t=${Date.now()}`);
+        if (!response.ok) throw new Error("無法從伺服器取得清單檔案");
         
         const stationsText = await response.text();
         renderList(stationsText);
     } catch (err) {
         console.error(err);
-        stationListEl.innerHTML = `<div class="loading-msg" style="color:#ff4d4d;">載入失敗: ${err.message}<br>請檢查 FM_list.txt 是否存在</div>`;
+        stationListEl.innerHTML = `<div class="loading-msg" style="color:#ff4d4d;">載入失敗: ${err.message}<br>請檢查網路連線或 GitHub 路徑</div>`;
     }
 }
 
@@ -380,4 +383,5 @@ function playMedia(url, btn) {
 init();
 </script>
 </body>
+
 </html>
