@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>FM 廣播電臺 - 雲端自動同步版</title>
+<title>FM 廣播電臺 - 路徑偵測與功能增強版</title>
 <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
 <style>
@@ -100,19 +100,17 @@ body {
 
 audio { width: 100%; height: 34px; }
 
-/* 按鈕樣式 */
+/* 按鈕與狀態樣式 */
 .station-btn {
     background: #111; color: #ccc; border: 1px solid #333; border-radius: 8px;
     padding: 10px 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;
     font-size: 0.85rem; overflow: hidden;
 }
 .station-btn.active { border-color: #d4af37; color: #fff; background: #1a1a00; }
-.heart { background: none; border: none; cursor: pointer; color: #444; }
-.heart.active { color: #ff4d4d; }
 
-/* 錯誤訊息樣式 */
 .loading-msg { padding: 20px; text-align: center; color: #888; grid-column: span 2; line-height: 1.6; }
-.error-path { color: #ffaa00; font-family: monospace; word-break: break-all; background: #221111; padding: 8px; display: block; margin-top: 10px; border-radius: 4px; border: 1px solid #442222; }
+.success-tag { color: #00ff00; font-size: 0.8rem; background: #003300; padding: 4px 8px; border-radius: 4px; margin-bottom: 10px; display: inline-block; border: 1px solid #005500; }
+.error-path { color: #ffaa00; font-family: monospace; word-break: break-all; background: #221111; padding: 8px; display: block; margin-top: 5px; border-radius: 4px; font-size: 0.75rem; border: 1px solid #442222; }
 
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
@@ -122,17 +120,17 @@ audio { width: 100%; height: 34px; }
 
 <div id="left-panel">
     <div id="station-list">
-        <div class="loading-msg">正在連線至 GitHub 獲取清單...</div>
+        <div class="loading-msg" id="status-msg">正在偵測清單路徑...</div>
     </div>
 </div>
 
 <div id="right-panel">
     <div id="info-area">
-        <div id="station-name">請選擇電台</div>
+        <div id="station-name">清單載入中</div>
         <div id="np-sub">READY TO PLAY</div>
     </div>
     <div id="lyrics-container">
-        <div id="lyrics-wrapper"><div class="lyric-line active">歡迎使用</div></div>
+        <div id="lyrics-wrapper"><div class="lyric-line active">歡迎使用廣播電臺</div></div>
     </div>
     <div id="controls-area">
         <div class="player-pill"><audio id="audio" controls crossorigin="anonymous"></audio></div>
@@ -145,83 +143,100 @@ const stationNameDisp = document.getElementById("station-name");
 const npSubDisp = document.getElementById("np-sub");
 const stationListEl = document.getElementById("station-list");
 const lyricsWrapper = document.getElementById("lyrics-wrapper");
+const statusMsg = document.getElementById("status-msg");
 
 let hls, currentLyrics = [];
-let favorites = new Set(JSON.parse(localStorage.getItem("radio_favs") || "[]"));
 let localAudioFiles = [];
 let selectedFolderHandle = null;
 let isLocalMode = false;
 
-// 指定 GitHub 檔案路徑
-const TARGET_URL = "https://ddhola.github.io/tool/FM.txt";
+// 指定測試路徑
+const pathsToTest = [
+    "https://ddhola.github.io/tool/FM.list",
+    "https://github.com/ddhola/tool/blob/main/F%EF%BC%AD.list",
+    "https://raw.githubusercontent.com/ddhola/tool/refs/heads/main/F%EF%BC%AD.list",
+    "https://raw.githubusercontent.com/ddhola/tool/main/FM.list"
+];
 
-// 1. 初始化：讀取清單
+// 1. 初始化：多路徑偵測讀取
 async function init() {
-    try {
-        const response = await fetch(`${TARGET_URL}?t=${Date.now()}`);
-        if (!response.ok) throw new Error(`伺服器回應錯誤 (代碼: ${response.status})`);
-        
-        const stationsText = await response.text();
-        renderList(stationsText);
-    } catch (err) {
-        console.error("載入失敗:", err);
+    let successPath = null;
+    let fileContent = null;
+
+    for (let url of pathsToTest) {
+        try {
+            console.log(`正在嘗試路徑: ${url}`);
+            const response = await fetch(`${url}?t=${Date.now()}`);
+            
+            if (response.ok) {
+                const text = await response.text();
+                // 檢查是否為有效的 csv/txt 格式且排除 GitHub 的 HTML 頁面
+                if (text.includes(',') && !text.includes('<!DOCTYPE html>')) {
+                    fileContent = text;
+                    successPath = url;
+                    break; 
+                }
+            }
+        } catch (e) {
+            console.warn(`跳過失效路徑: ${url}`);
+        }
+    }
+
+    if (successPath && fileContent) {
+        renderList(fileContent, successPath);
+    } else {
         stationListEl.innerHTML = `
             <div class="loading-msg" style="color:#ff4d4d;">
-                <strong>⚠️ 載入清單失敗</strong><br>
-                ${err.message}<br>
-                <div style="margin-top:15px; text-align:left; color:#ccc;">
-                    程式讀取的路徑：
-                    <span class="error-path">${TARGET_URL}</span>
-                </div>
+                <strong>⚠️ 無法讀取有效的 FM.list 檔案</strong><br>
+                請確認檔案是否已公開且為純文字格式。<br>
+                <div style="margin-top:10px; text-align:left; color:#999;">嘗試讀取的路徑清單：</div>
+                ${pathsToTest.map(p => `<span class="error-path">${p}</span>`).join('')}
             </div>`;
+        stationNameDisp.textContent = "載入失敗";
     }
 }
 
 // 2. 渲染列表
-function renderList(text) {
+function renderList(text, usedUrl) {
     const stations = text.trim().split('\n').map(line => {
         const parts = line.split(',');
         return [parts[0].trim(), parts.slice(1).join(',').trim()];
     });
 
-    stationListEl.innerHTML = "";
+    stationListEl.innerHTML = `<div style="grid-column: span 2; padding: 0 10px;">
+        <span class="success-tag">✅ 已成功連線：${usedUrl}</span>
+    </div>`;
+
     stations.forEach(([name, url]) => {
         if (!name) return;
         const btn = document.createElement("button");
         btn.className = "station-btn";
-        btn.onclick = () => playStation(name, url, btn);
+        btn.innerHTML = `<span>${name}</span>`;
         
+        btn.onclick = () => {
+            if (name === '本地音樂檔案') {
+                selectAndLoadFolder(btn, false);
+            } else {
+                playStation(name, url, btn);
+            }
+        };
+
         if (name === '本地音樂檔案') {
             btn.ondblclick = (e) => { e.stopPropagation(); selectAndLoadFolder(btn, true); };
         }
         
-        const meta = document.createElement("span");
-        meta.textContent = name;
-        
-        const heart = document.createElement("button");
-        heart.className = `heart ${favorites.has(name) ? 'active' : ''}`;
-        heart.textContent = favorites.has(name) ? "❤️" : "🤍";
-        heart.onclick = e => {
-            e.stopPropagation();
-            favorites.has(name) ? favorites.delete(name) : favorites.add(name);
-            heart.textContent = favorites.has(name) ? "❤️" : "🤍";
-            heart.classList.toggle("active");
-            localStorage.setItem("radio_favs", JSON.stringify([...favorites]));
-        };
-        
-        btn.append(meta, heart);
         stationListEl.appendChild(btn);
     });
+    stationNameDisp.textContent = "請選擇電台";
 }
 
-// 3. 播放逻辑與歌詞控制
+// 3. 播放功能與歌詞控制
 function playStation(name, url, btn) {
-    if (name === '本地音樂檔案') { selectAndLoadFolder(btn, false); return; }
     isLocalMode = false;
     audio.onended = null;
     stationNameDisp.textContent = name;
     npSubDisp.textContent = "LIVE RADIO";
-    lyricsWrapper.innerHTML = '<div class="lyric-line active">串流廣播模式</div>';
+    lyricsWrapper.innerHTML = '<div class="lyric-line active">網路串流模式</div>';
     playMedia(url, btn);
 }
 
@@ -240,7 +255,7 @@ function playMedia(url, btn) {
     btn.classList.add("active");
 }
 
-// --- 本地資料夾播放邏輯 ---
+// --- 本地資料夾播放 ---
 async function selectAndLoadFolder(btn, forceSelect) {
     if (forceSelect || !selectedFolderHandle) {
         try { selectedFolderHandle = await window.showDirectoryPicker(); } catch (err) { return; }
@@ -279,7 +294,7 @@ function playLocal(index, btn) {
     audio.onended = () => { if (isLocalMode) playLocal((index + 1) % localAudioFiles.length, btn); };
 }
 
-// 歌詞同步解析 (LRCLIB)
+// 歌詞同步 (LRCLIB)
 async function fetchLyrics(title, artist) {
     lyricsWrapper.innerHTML = '<div class="lyric-line active">搜尋歌詞中...</div>';
     currentLyrics = [];
@@ -312,9 +327,8 @@ audio.addEventListener('timeupdate', () => {
     }
 });
 
-init(); // 啟動
+// 啟動
+init();
 </script>
 </body>
 </html>
-
-
