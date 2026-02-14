@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>FM 廣播電臺 - GitHub 雲端清單版2</title>
+<title>FM 廣播電臺 - 雲端同步版3</title>
 <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
 <style>
@@ -17,7 +17,6 @@ body {
     overflow: hidden;
 }
 
-/* 左側：電台列表 (佔 2/5) */
 #left-panel {
     flex: 2;
     border-right: 1px solid #222;
@@ -29,12 +28,11 @@ body {
 #station-list {
     padding: 12px;
     display: grid;
-    grid-template-columns: 1fr 1fr; /* 雙欄排列 */
+    grid-template-columns: 1fr 1fr;
     gap: 8px;
     overflow-y: auto;
 }
 
-/* 右側：播放區與歌詞 (佔 3/5) */
 #right-panel {
     flex: 3;
     display: flex;
@@ -44,7 +42,6 @@ body {
     position: relative;
 }
 
-/* 歌曲資訊 (頂部) */
 #info-area {
     padding: 30px 20px 10px 20px;
     text-align: center;
@@ -52,7 +49,6 @@ body {
 #station-name { font-size: 1.5rem; font-weight: bold; margin-bottom: 5px; color: #fff; }
 #np-sub { color: #888; font-size: 1.5rem; letter-spacing: 1px; }
 
-/* 歌詞區 (中間自適應) */
 #lyrics-container {
     flex-grow: 1;
     overflow: hidden;
@@ -74,21 +70,9 @@ body {
     line-height: 1.5;
 }
 
-.lyric-line.past {
-    color: #ccc; 
-    opacity: 0.8;
-    transform: scale(0.95);
-}
+.lyric-line.past { color: #ccc; opacity: 0.8; transform: scale(0.95); }
+.lyric-line.active { color: #fff; font-size: 1.2rem; font-weight: bold; opacity: 1; text-shadow: 0 0 10px rgba(255,255,255,0.3); }
 
-.lyric-line.active {
-    color: #fff;
-    font-size: 1.2rem; 
-    font-weight: bold;
-    opacity: 1;
-    text-shadow: 0 0 10px rgba(255,255,255,0.3);
-}
-
-/* 底部播放膠囊區 */
 #controls-area {
     padding: 20px 0 40px 0; 
     display: flex;
@@ -107,7 +91,6 @@ body {
 
 audio { width: 100%; height: 34px; }
 
-/* 電台按鈕樣式 */
 .station-btn {
     background: #111; color: #ccc; border: 1px solid #333; border-radius: 8px;
     padding: 10px 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;
@@ -118,11 +101,9 @@ audio { width: 100%; height: 34px; }
 .heart { background: none; border: none; cursor: pointer; font-size: 16px; color: #444; }
 .heart.active { color: #ff4d4d; }
 
+.loading-msg { padding: 20px; text-align: center; color: #888; grid-column: span 2; }
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
-
-/* 讀取中狀態 */
-.loading-msg { padding: 20px; text-align: center; color: #888; grid-column: span 2; }
 </style>
 </head>
 <body>
@@ -138,13 +119,11 @@ audio { width: 100%; height: 34px; }
         <div id="station-name">請選擇電台</div>
         <div id="np-sub">READY TO PLAY</div>
     </div>
-
     <div id="lyrics-container">
         <div id="lyrics-wrapper">
             <div class="lyric-line active">歡迎播放音樂</div>
         </div>
     </div>
-
     <div id="controls-area">
         <div class="player-pill">
             <audio id="audio" controls crossorigin="anonymous"></audio>
@@ -165,38 +144,25 @@ let localAudioFiles = [];
 let selectedFolderHandle = null;
 let isLocalMode = false;
 
-// 1. 初始化音量
-audio.volume = localStorage.getItem('radio_volume') || 0.6;
-audio.addEventListener('volumechange', () => localStorage.setItem('radio_volume', audio.volume));
-
-// 2. 空格鍵快捷鍵
-document.addEventListener('keydown', (e) => {
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-    if (e.code === 'Space') {
-        e.preventDefault();
-        audio.paused ? audio.play().catch(()=>{}) : audio.pause();
-    }
-});
-
-// 3. 核心功能：從 GitHub 讀取清單
-// 將原有的 init 函式替換為這個版本
+// 1. 抓取 GitHub 上的 FM_list.txt
 async function init() {
     try {
-        // 使用 GitHub Raw 的絕對路徑，確保檔案一定能被抓到
-        // 網址格式：https://raw.githubusercontent.com/使用者名稱/儲存庫/分支/檔案名稱
-        const rawUrl = "https://raw.githubusercontent.com/ddhola/tool/main/FM_list.txt";
+        // 使用 GitHub Raw 絕對路徑避免路徑偏移
+        const rawUrl = "https://raw.githubusercontent.com/ddhola/tool/refs/heads/main/F%EF%BC%ADList.txt";
         
+        // 加上 timestamp (?t=...) 強制跳過瀏覽器快取
         const response = await fetch(`${rawUrl}?t=${Date.now()}`);
-        if (!response.ok) throw new Error("無法從伺服器取得清單檔案");
+        if (!response.ok) throw new Error("GitHub 檔案回應不正常");
         
         const stationsText = await response.text();
         renderList(stationsText);
     } catch (err) {
         console.error(err);
-        stationListEl.innerHTML = `<div class="loading-msg" style="color:#ff4d4d;">載入失敗: ${err.message}<br>請檢查網路連線或 GitHub 路徑</div>`;
+        stationListEl.innerHTML = `<div class="loading-msg" style="color:#ff4d4d;">載入失敗: 無法讀取 GitHub 上的清單<br>請確認 FM_list.txt 是否公開</div>`;
     }
 }
 
+// 2. 渲染清單
 function renderList(text) {
     const stations = text.trim().split('\n').map(line => {
         const parts = line.split(',');
@@ -205,18 +171,14 @@ function renderList(text) {
 
     stationListEl.innerHTML = "";
     stations.forEach(([name, url]) => {
-        if(!name) return; // 略過空白行
+        if(!name) return;
 
         const btn = document.createElement("button");
         btn.className = "station-btn";
         btn.onclick = () => playStation(name, url, btn);
         
-        // 本地音樂雙擊選取資料夾
         if (name === '本地音樂檔案') {
-            btn.ondblclick = (e) => {
-                e.stopPropagation();
-                selectAndLoadFolder(btn, true);
-            };
+            btn.ondblclick = (e) => { e.stopPropagation(); selectAndLoadFolder(btn, true); };
         }
         
         const meta = document.createElement("span");
@@ -244,8 +206,7 @@ function renderList(text) {
     });
 }
 
-// --- 以下為播放與歌詞邏輯 (保持不變) ---
-
+// --- 播放與歌詞核心邏輯 ---
 function parseLRC(lrcText) {
     const lines = lrcText.split('\n');
     const result = [];
@@ -262,7 +223,7 @@ function parseLRC(lrcText) {
 }
 
 async function fetchLyrics(title, artist) {
-    lyricsWrapper.innerHTML = '<div class="lyric-line active">正在抓取歌詞...</div>';
+    lyricsWrapper.innerHTML = '<div class="lyric-line active">正在搜尋歌詞...</div>';
     currentLyrics = [];
     try {
         const url = `https://lrclib.net/api/get?artist_name=${encodeURIComponent(artist)}&track_name=${encodeURIComponent(title)}`;
@@ -286,7 +247,6 @@ function renderLyrics() {
 audio.addEventListener('timeupdate', () => {
     if (!currentLyrics.length) return;
     let idx = currentLyrics.findIndex((l, i) => audio.currentTime >= l.time && (!currentLyrics[i+1] || audio.currentTime < currentLyrics[i+1].time));
-    
     if (idx !== -1) {
         document.querySelectorAll('.lyric-line').forEach((line, i) => {
             line.className = 'lyric-line';
@@ -294,7 +254,6 @@ audio.addEventListener('timeupdate', () => {
             else if (i === idx) line.classList.add('active');
             else line.classList.add('future');
         });
-
         const activeLine = document.getElementById(`lrc-${idx}`);
         if (activeLine) {
             const containerHeight = document.getElementById('lyrics-container').offsetHeight;
@@ -304,11 +263,34 @@ audio.addEventListener('timeupdate', () => {
     }
 });
 
+function playStation(name, url, btn) {
+    if (name === '本地音樂檔案') { selectAndLoadFolder(btn, false); return; }
+    isLocalMode = false;
+    audio.onended = null;
+    stationNameDisp.textContent = name;
+    npSubDisp.textContent = "LIVE RADIO";
+    lyricsWrapper.innerHTML = '<div class="lyric-line active">廣播電台模式</div>';
+    playMedia(url, btn);
+}
+
+function playMedia(url, btn) {
+    audio.pause();
+    if (hls) hls.destroy();
+    if (url.includes(".m3u8")) {
+        if (Hls.isSupported()) {
+            hls = new Hls();
+            hls.loadSource(url);
+            hls.attachMedia(audio);
+            hls.on(Hls.Events.MANIFEST_PARSED, () => audio.play().catch(()=>{}));
+        } else { audio.src = url; audio.play().catch(()=>{}); }
+    } else { audio.src = url; audio.play().catch(()=>{}); }
+    document.querySelectorAll(".station-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+}
+
 async function selectAndLoadFolder(btn, forceSelect = false) {
     if (forceSelect || !selectedFolderHandle) {
-        try {
-            selectedFolderHandle = await window.showDirectoryPicker();
-        } catch (err) { return; }
+        try { selectedFolderHandle = await window.showDirectoryPicker(); } catch (err) { return; }
     }
     localAudioFiles = [];
     await recurseDirectory(selectedFolderHandle);
@@ -338,51 +320,14 @@ function playLocal(index, btn) {
             npSubDisp.textContent = a;
             fetchLyrics(t, a);
         },
-        onError: () => {
-            stationNameDisp.textContent = item.name;
-            npSubDisp.textContent = "本地音樂";
-        }
+        onError: () => { stationNameDisp.textContent = item.name; npSubDisp.textContent = "本地音樂"; }
     });
     playMedia(item.url, btn);
     audio.onended = () => { if (isLocalMode) playLocal((index + 1) % localAudioFiles.length, btn); };
 }
 
-function playStation(name, url, btn) {
-    if (name === '本地音樂檔案') {
-        selectAndLoadFolder(btn, false);
-        return;
-    }
-    isLocalMode = false;
-    audio.onended = null;
-    stationNameDisp.textContent = name;
-    npSubDisp.textContent = "LIVE RADIO";
-    lyricsWrapper.innerHTML = '<div class="lyric-line active">廣播電台模式暫無同步歌詞</div>';
-    playMedia(url, btn);
-}
-
-function playMedia(url, btn) {
-    audio.pause();
-    if (hls) hls.destroy();
-    if (url.includes(".m3u8")) {
-        if (Hls.isSupported()) {
-            hls = new Hls();
-            hls.loadSource(url);
-            hls.attachMedia(audio);
-            hls.on(Hls.Events.MANIFEST_PARSED, () => audio.play().catch(()=>{}));
-        } else {
-            audio.src = url; audio.play().catch(()=>{});
-        }
-    } else {
-        audio.src = url; audio.play().catch(()=>{});
-    }
-    document.querySelectorAll(".station-btn").forEach(b => b.classList.remove("active"));
-    btn.classList.add("active");
-}
-
-// 啟動程式
+// 初始化啟動
 init();
 </script>
 </body>
-
 </html>
-
