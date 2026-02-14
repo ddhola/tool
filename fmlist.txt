@@ -1,8 +1,5 @@
 本地音樂檔案,
 江蘇經典流行音樂廣播,http://lzlive.vojs.cn/2wtSfrS/92/live.m3u8
-江苏经典流行音乐,http://lzlive.vojs.cn/2wtSfrS/92/live.m3u8
-江苏经典流行音乐2,http://[2409:8087:2001:20:2800:0:df6e:eb02]:80/wh7f454c46tw1764113609_586655061/ott.mobaibox.com/PLTV/3/224/3221227943/index.m3u8?icpid=3&RTS=1674386174&from=40&popid=40&hms_devid=2039&prioritypopid=40&vqe=3
-
 亞太之聲 (純音樂),https://stream.rcs.revma.com/kydend74hv8uv
 中廣流行網,http://n14.rcs.revma.com/aw9uqyxy2tzuv
 中廣新聞網,http://n12.rcs.revma.com/78fm9wyy2tzuv
@@ -93,6 +90,7 @@ RTI閩客粵語和歐美外語Live,https://streamak0138.akamaized.net/live0138lh
 寶島聯播網|主人電台,http://125.227.87.206:8000/FM96.9
 寶島聯播網|寶島新聲,http://125.227.87.206:8000/FM98.5
 警廣之聲,http://play-radio-stream3.hndt.com/now/prIgXGFo/playlist.m3u8
+
 
 
 
