@@ -16,7 +16,6 @@ body {
     display: flex;
     overflow: hidden;
 }
-
 /* 左側：電台列表 (佔 2/5) */
 #left-panel {
     flex: 2;
@@ -25,15 +24,13 @@ body {
     flex-direction: column;
     height: 100vh;
 }
-
 #station-list {
     padding: 12px;
     display: grid;
     grid-template-columns: 1fr 1fr; /* 雙欄排列 */
-    gap: 8px;
+    gap: 4px;  /* ← 改小間距，讓整體高度更緊湊，像原本 */
     overflow-y: auto;
 }
-
 /* 右側：播放區與歌詞 (佔 3/5) */
 #right-panel {
     flex: 3;
@@ -43,7 +40,6 @@ body {
     height: 100vh;
     position: relative;
 }
-
 /* 歌曲資訊 (頂部) */
 #info-area {
     padding: 30px 20px 10px 20px;
@@ -51,7 +47,6 @@ body {
 }
 #station-name { font-size: 1.5rem; font-weight: bold; margin-bottom: 5px; color: #fff; }
 #np-sub { color: #888; font-size: 1.5rem; letter-spacing: 1px; }
-
 /* 歌詞區 (中間自適應) */
 #lyrics-container {
     flex-grow: 1;
@@ -60,51 +55,36 @@ body {
     mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%);
     -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%);
 }
-
 #lyrics-wrapper {
     transition: transform 0.5s ease-out;
     text-align: center;
     padding-top: 20px;
 }
-
 .lyric-line {
-    font-size: 0.95rem; /* 預設字號 */
+    font-size: 0.95rem;
     padding: 10px 20px;
     transition: all 0.4s ease;
     line-height: 1.5;
 }
-
-/* 未播放歌詞：亮一些 */
 .lyric-line.past {
-    color: #ccc; 
+    color: #ccc;
     opacity: 0.8;
     transform: scale(0.95);
 }
-
-/* 當前播放歌詞：縮小一些，保持高亮 */
 .lyric-line.active {
     color: #fff;
-    font-size: 1.2rem; /* 調小後的字號 */
+    font-size: 1.2rem;
     font-weight: bold;
     opacity: 1;
     text-shadow: 0 0 10px rgba(255,255,255,0.3);
 }
-
-/* 已播放過歌詞
-
-.lyric-line.future {
-    color: #ccc; 
-    opacity: 0.8;
-}
-
 /* 底部播放膠囊區 */
 #controls-area {
-    padding: 20px 0 40px 0; /* 挪到最底 */
+    padding: 20px 0 40px 0;
     display: flex;
     justify-content: center;
     background: linear-gradient(to top, #080808 80%, transparent);
 }
-
 .player-pill {
     background: #fff;
     border-radius: 999px;
@@ -113,20 +93,40 @@ body {
     max-width: 400px;
     box-shadow: 0 -5px 25px rgba(0,0,0,0.5);
 }
-
 audio { width: 100%; height: 34px; }
-
-/* 電台按鈕樣式 */
+/* 電台按鈕樣式 - 調整高度並加 hover 藍色 */
 .station-btn {
-    background: #111; color: #ccc; border: 1px solid #333; border-radius: 8px;
-    padding: 10px 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;
-    font-size: 0.85rem; overflow: hidden;
+    background: #111;
+    color: #ccc;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 8px 10px;  /* ← 垂直 padding 從 10px 減到 8px，讓按鈕更矮 */
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.85rem;
+    overflow: hidden;
+    transition: background 0.2s ease, border-color 0.2s ease;  /* 平滑過渡 */
 }
-.station-btn:hover { background: #1a1a1a; color: #fff; }
-.station-btn.active { border-color: #d4af37; color: #fff; background: #1a1a00; }
-.heart { background: none; border: none; cursor: pointer; font-size: 16px; color: #444; }
+.station-btn:hover {
+    background: #0055aa;  /* ← hover 時變藍色（深藍，可改成 #1e90ff 較亮） */
+    color: #fff;
+    border-color: #0077ff;
+}
+.station-btn.active {
+    border-color: #d4af37;
+    color: #fff;
+    background: #1a1a00;
+}
+.heart {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 16px;
+    color: #444;
+}
 .heart.active { color: #ff4d4d; }
-
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
 </style>
@@ -469,3 +469,4 @@ renderList();
 </script>
 </body>
 </html>
+
