@@ -2,11 +2,11 @@
 <html lang="zh-TW">
 <head>
 <meta charset="UTF-8">
-<title>FM 廣播電臺 - 雲端同步版3</title>
+<title>FM 廣播電臺 - 雲端自動同步版</title>
 <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
 <style>
-/* ===== 基本佈局 ===== */
+/* ===== 基本佈局與樣式 ===== */
 body {
     margin: 0;
     background: #000;
@@ -17,6 +17,7 @@ body {
     overflow: hidden;
 }
 
+/* 左側：電台列表 */
 #left-panel {
     flex: 2;
     border-right: 1px solid #222;
@@ -33,6 +34,7 @@ body {
     overflow-y: auto;
 }
 
+/* 右側：播放與歌詞區 */
 #right-panel {
     flex: 3;
     display: flex;
@@ -68,11 +70,19 @@ body {
     padding: 10px 20px;
     transition: all 0.4s ease;
     line-height: 1.5;
+    color: #666;
 }
 
-.lyric-line.past { color: #ccc; opacity: 0.8; transform: scale(0.95); }
-.lyric-line.active { color: #fff; font-size: 1.2rem; font-weight: bold; opacity: 1; text-shadow: 0 0 10px rgba(255,255,255,0.3); }
+.lyric-line.active {
+    color: #fff;
+    font-size: 1.2rem; 
+    font-weight: bold;
+    text-shadow: 0 0 10px rgba(255,255,255,0.3);
+}
 
+.lyric-line.past { color: #ccc; opacity: 0.6; }
+
+/* 底部播放控制 */
 #controls-area {
     padding: 20px 0 40px 0; 
     display: flex;
@@ -86,22 +96,24 @@ body {
     padding: 8px 16px;
     width: 85%;
     max-width: 400px;
-    box-shadow: 0 -5px 25px rgba(0,0,0,0.5);
 }
 
 audio { width: 100%; height: 34px; }
 
+/* 按鈕樣式 */
 .station-btn {
     background: #111; color: #ccc; border: 1px solid #333; border-radius: 8px;
     padding: 10px 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;
     font-size: 0.85rem; overflow: hidden;
 }
-.station-btn:hover { background: #1a1a1a; color: #fff; }
 .station-btn.active { border-color: #d4af37; color: #fff; background: #1a1a00; }
-.heart { background: none; border: none; cursor: pointer; font-size: 16px; color: #444; }
+.heart { background: none; border: none; cursor: pointer; color: #444; }
 .heart.active { color: #ff4d4d; }
 
-.loading-msg { padding: 20px; text-align: center; color: #888; grid-column: span 2; }
+/* 錯誤訊息樣式 */
+.loading-msg { padding: 20px; text-align: center; color: #888; grid-column: span 2; line-height: 1.6; }
+.error-path { color: #ffaa00; font-family: monospace; word-break: break-all; background: #221111; padding: 8px; display: block; margin-top: 10px; border-radius: 4px; border: 1px solid #442222; }
+
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-thumb { background: #333; border-radius: 10px; }
 </style>
@@ -110,7 +122,7 @@ audio { width: 100%; height: 34px; }
 
 <div id="left-panel">
     <div id="station-list">
-        <div class="loading-msg">正在載入電台清單...</div>
+        <div class="loading-msg">正在連線至 GitHub 獲取清單...</div>
     </div>
 </div>
 
@@ -120,14 +132,10 @@ audio { width: 100%; height: 34px; }
         <div id="np-sub">READY TO PLAY</div>
     </div>
     <div id="lyrics-container">
-        <div id="lyrics-wrapper">
-            <div class="lyric-line active">歡迎播放音樂</div>
-        </div>
+        <div id="lyrics-wrapper"><div class="lyric-line active">歡迎使用</div></div>
     </div>
     <div id="controls-area">
-        <div class="player-pill">
-            <audio id="audio" controls crossorigin="anonymous"></audio>
-        </div>
+        <div class="player-pill"><audio id="audio" controls crossorigin="anonymous"></audio></div>
     </div>
 </div>
 
@@ -144,25 +152,32 @@ let localAudioFiles = [];
 let selectedFolderHandle = null;
 let isLocalMode = false;
 
-// 1. 抓取 GitHub 上的 FM_list.txt
+// 指定 GitHub 檔案路徑
+const TARGET_URL = "https://raw.githubusercontent.com/ddhola/tool/main/FM.txt";
+
+// 1. 初始化：讀取清單
 async function init() {
     try {
-        // 使用 GitHub Raw 絕對路徑避免路徑偏移
-        const rawUrl = "https://raw.githubusercontent.com/ddhola/tool/refs/heads/main/FM.txt";
-        
-        // 加上 timestamp (?t=...) 強制跳過瀏覽器快取
-        const response = await fetch(`${rawUrl}?t=${Date.now()}`);
-        if (!response.ok) throw new Error("GitHub 檔案回應不正常");
+        const response = await fetch(`${TARGET_URL}?t=${Date.now()}`);
+        if (!response.ok) throw new Error(`伺服器回應錯誤 (代碼: ${response.status})`);
         
         const stationsText = await response.text();
         renderList(stationsText);
     } catch (err) {
-        console.error(err);
-        stationListEl.innerHTML = `<div class="loading-msg" style="color:#ff4d4d;">載入失敗: 無法讀取 GitHub 上的清單<br>請確認 FM_list.txt 是否公開</div>`;
+        console.error("載入失敗:", err);
+        stationListEl.innerHTML = `
+            <div class="loading-msg" style="color:#ff4d4d;">
+                <strong>⚠️ 載入清單失敗</strong><br>
+                ${err.message}<br>
+                <div style="margin-top:15px; text-align:left; color:#ccc;">
+                    程式讀取的路徑：
+                    <span class="error-path">${TARGET_URL}</span>
+                </div>
+            </div>`;
     }
 }
 
-// 2. 渲染清單
+// 2. 渲染列表
 function renderList(text) {
     const stations = text.trim().split('\n').map(line => {
         const parts = line.split(',');
@@ -171,8 +186,7 @@ function renderList(text) {
 
     stationListEl.innerHTML = "";
     stations.forEach(([name, url]) => {
-        if(!name) return;
-
+        if (!name) return;
         const btn = document.createElement("button");
         btn.className = "station-btn";
         btn.onclick = () => playStation(name, url, btn);
@@ -189,15 +203,9 @@ function renderList(text) {
         heart.textContent = favorites.has(name) ? "❤️" : "🤍";
         heart.onclick = e => {
             e.stopPropagation();
-            if (favorites.has(name)) {
-                favorites.delete(name);
-                heart.textContent = "🤍";
-                heart.classList.remove("active");
-            } else {
-                favorites.add(name);
-                heart.textContent = "❤️";
-                heart.classList.add("active");
-            }
+            favorites.has(name) ? favorites.delete(name) : favorites.add(name);
+            heart.textContent = favorites.has(name) ? "❤️" : "🤍";
+            heart.classList.toggle("active");
             localStorage.setItem("radio_favs", JSON.stringify([...favorites]));
         };
         
@@ -206,70 +214,14 @@ function renderList(text) {
     });
 }
 
-// --- 播放與歌詞核心邏輯 ---
-function parseLRC(lrcText) {
-    const lines = lrcText.split('\n');
-    const result = [];
-    const timeReg = /\[(\d{2}):(\d{2})\.(\d{2,3})\]/;
-    lines.forEach(line => {
-        const match = timeReg.exec(line);
-        if (match) {
-            const seconds = parseInt(match[1]) * 60 + parseInt(match[2]) + parseInt(match[3]) / 1000;
-            const text = line.replace(timeReg, '').trim();
-            if (text) result.push({ time: seconds, text });
-        }
-    });
-    return result;
-}
-
-async function fetchLyrics(title, artist) {
-    lyricsWrapper.innerHTML = '<div class="lyric-line active">正在搜尋歌詞...</div>';
-    currentLyrics = [];
-    try {
-        const url = `https://lrclib.net/api/get?artist_name=${encodeURIComponent(artist)}&track_name=${encodeURIComponent(title)}`;
-        const res = await fetch(url);
-        const data = await res.json();
-        if (data.syncedLyrics) {
-            currentLyrics = parseLRC(data.syncedLyrics);
-            renderLyrics();
-        } else {
-            lyricsWrapper.innerHTML = '<div class="lyric-line active">暫無同步歌詞</div>';
-        }
-    } catch (e) {
-        lyricsWrapper.innerHTML = '<div class="lyric-line active">未找到歌詞</div>';
-    }
-}
-
-function renderLyrics() {
-    lyricsWrapper.innerHTML = currentLyrics.map((l, i) => `<div class="lyric-line future" id="lrc-${i}">${l.text}</div>`).join('');
-}
-
-audio.addEventListener('timeupdate', () => {
-    if (!currentLyrics.length) return;
-    let idx = currentLyrics.findIndex((l, i) => audio.currentTime >= l.time && (!currentLyrics[i+1] || audio.currentTime < currentLyrics[i+1].time));
-    if (idx !== -1) {
-        document.querySelectorAll('.lyric-line').forEach((line, i) => {
-            line.className = 'lyric-line';
-            if (i < idx) line.classList.add('past');
-            else if (i === idx) line.classList.add('active');
-            else line.classList.add('future');
-        });
-        const activeLine = document.getElementById(`lrc-${idx}`);
-        if (activeLine) {
-            const containerHeight = document.getElementById('lyrics-container').offsetHeight;
-            const offset = activeLine.offsetTop - (containerHeight / 3); 
-            lyricsWrapper.style.transform = `translateY(${-offset}px)`;
-        }
-    }
-});
-
+// 3. 播放逻辑與歌詞控制
 function playStation(name, url, btn) {
     if (name === '本地音樂檔案') { selectAndLoadFolder(btn, false); return; }
     isLocalMode = false;
     audio.onended = null;
     stationNameDisp.textContent = name;
     npSubDisp.textContent = "LIVE RADIO";
-    lyricsWrapper.innerHTML = '<div class="lyric-line active">廣播電台模式</div>';
+    lyricsWrapper.innerHTML = '<div class="lyric-line active">串流廣播模式</div>';
     playMedia(url, btn);
 }
 
@@ -288,7 +240,8 @@ function playMedia(url, btn) {
     btn.classList.add("active");
 }
 
-async function selectAndLoadFolder(btn, forceSelect = false) {
+// --- 本地資料夾播放邏輯 ---
+async function selectAndLoadFolder(btn, forceSelect) {
     if (forceSelect || !selectedFolderHandle) {
         try { selectedFolderHandle = await window.showDirectoryPicker(); } catch (err) { return; }
     }
@@ -314,8 +267,8 @@ function playLocal(index, btn) {
     const item = localAudioFiles[index];
     window.jsmediatags.read(item.file, {
         onSuccess: (tag) => {
-            const t = tag.tags.title || item.name.replace(/\.[^/.]+$/, "");
-            const a = tag.tags.artist || "未知歌手";
+            const t = tag.tags.title || item.name;
+            const a = tag.tags.artist || "本地歌手";
             stationNameDisp.textContent = t;
             npSubDisp.textContent = a;
             fetchLyrics(t, a);
@@ -326,10 +279,40 @@ function playLocal(index, btn) {
     audio.onended = () => { if (isLocalMode) playLocal((index + 1) % localAudioFiles.length, btn); };
 }
 
-// 初始化啟動
-init();
+// 歌詞同步解析 (LRCLIB)
+async function fetchLyrics(title, artist) {
+    lyricsWrapper.innerHTML = '<div class="lyric-line active">搜尋歌詞中...</div>';
+    currentLyrics = [];
+    try {
+        const res = await fetch(`https://lrclib.net/api/get?artist_name=${encodeURIComponent(artist)}&track_name=${encodeURIComponent(title)}`);
+        const data = await res.json();
+        if (data.syncedLyrics) {
+            currentLyrics = data.syncedLyrics.split('\n').map(line => {
+                const m = line.match(/\[(\d+):(\d+\.\d+)\](.*)/);
+                return m ? { time: parseInt(m[1]) * 60 + parseFloat(m[2]), text: m[3] } : null;
+            }).filter(x => x);
+            renderLyrics();
+        } else { lyricsWrapper.innerHTML = '<div class="lyric-line active">暫無歌詞</div>'; }
+    } catch (e) { lyricsWrapper.innerHTML = '<div class="lyric-line active">未找到歌詞</div>'; }
+}
+
+function renderLyrics() {
+    lyricsWrapper.innerHTML = currentLyrics.map((l, i) => `<div class="lyric-line" id="lrc-${i}">${l.text}</div>`).join('');
+}
+
+audio.addEventListener('timeupdate', () => {
+    if (!currentLyrics.length) return;
+    let idx = currentLyrics.findIndex((l, i) => audio.currentTime >= l.time && (!currentLyrics[i+1] || audio.currentTime < currentLyrics[i+1].time));
+    if (idx !== -1) {
+        document.querySelectorAll('.lyric-line').forEach((line, i) => {
+            line.className = 'lyric-line' + (i < idx ? ' past' : (i === idx ? ' active' : ''));
+        });
+        const activeLine = document.getElementById(`lrc-${idx}`);
+        if (activeLine) lyricsWrapper.style.transform = `translateY(${-activeLine.offsetTop + 100}px)`;
+    }
+});
+
+init(); // 啟動
 </script>
 </body>
 </html>
-
-
