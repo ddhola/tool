@@ -2,123 +2,130 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>IPTV 轉換工具 - 單頁自動版</title>
+    <title>IPTV 轉換管理系統</title>
     <style>
-        :root { --primary: #1a73e8; --success: #34a853; --bg: #f8f9fa; }
+        :root { --primary: #1a73e8; --success: #34a853; --warning: #f9ab00; --error: #ea4335; --bg: #f8f9fa; }
         body { font-family: "Segoe UI", "Microsoft JhengHei", sans-serif; margin: 0; background: var(--bg); height: 100vh; overflow: hidden; }
-        
-        /* 頂部導航 */
         header { background: white; padding: 10px 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; height: 50px; box-sizing: border-box; }
-        h1 { font-size: 1.2rem; margin: 0; color: var(--primary); }
-
-        /* 主容器 */
-        main { display: flex; height: calc(100vh - 50px); padding: 15px; gap: 15px; box-sizing: border-box; }
-
-        /* 左側控制欄 */
-        .left-panel { flex: 0 0 350px; display: flex; flex-direction: column; gap: 15px; }
-        
-        /* 右側預覽欄 */
-        .right-panel { flex: 1; display: flex; flex-direction: column; gap: 15px; }
-
-        .card { background: white; padding: 15px; border-radius: 8px; border: 1px solid #e0e0e0; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        h1 { font-size: 1.1rem; margin: 0; color: var(--primary); }
+        main { display: flex; height: calc(100vh - 50px); padding: 12px; gap: 12px; box-sizing: border-box; }
+        .left-panel { flex: 0 0 320px; display: flex; flex-direction: column; gap: 12px; }
+        .right-panel { flex: 1; display: flex; flex-direction: column; gap: 12px; }
+        .card { background: white; padding: 12px; border-radius: 8px; border: 1px solid #ddd; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
         .status-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; background: #ccc; }
-        .status-ok { background: var(--success); box-shadow: 0 0 5px var(--success); }
-        
-        /* 操作日誌 */
-        #log { flex: 1; background: #2d3436; color: #dfe6e9; padding: 10px; border-radius: 6px; font-family: Consolas, monospace; font-size: 12px; overflow-y: auto; line-height: 1.4; }
-
-        /* 預覽視窗 */
+        .dot-green { background: var(--success); box-shadow: 0 0 5px var(--success); }
+        .dot-blue { background: var(--primary); box-shadow: 0 0 5px var(--primary); }
+        .dot-red { background: var(--error); box-shadow: 0 0 5px var(--error); }
+        #log { flex: 1; background: #2d3436; color: #dfe6e9; padding: 10px; border-radius: 6px; font-family: Consolas, monospace; font-size: 11px; overflow-y: auto; line-height: 1.4; }
         .preview-container { flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; min-height: 0; }
-        .preview-box { display: flex; flex-direction: column; }
-        textarea { flex: 1; resize: none; font-family: Consolas, monospace; font-size: 12px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; background: #fff; }
-
-        /* 按鈕樣式 */
-        button { padding: 10px; cursor: pointer; border-radius: 5px; border: none; font-weight: bold; transition: 0.2s; }
-        .btn-main { background: var(--primary); color: white; width: 100%; font-size: 1rem; margin-top: 10px; }
-        .btn-main:hover { background: #1557b0; }
-        .btn-download { background: var(--success); color: white; margin-top: 8px; }
-        
-        input[type="file"] { width: 100%; font-size: 0.9rem; }
-        small { color: #666; font-size: 0.8rem; }
+        textarea { flex: 1; resize: none; font-family: Consolas, monospace; font-size: 11px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; }
+        button { padding: 8px 12px; cursor: pointer; border-radius: 5px; border: none; font-weight: bold; font-size: 13px; }
+        .btn-main { background: var(--primary); color: white; width: 100%; margin-top: 10px; }
+        .btn-update { background: #eee; color: #333; width: 100%; border: 1px solid #ccc; margin-top: 5px; }
+        .btn-download { background: var(--success); color: white; margin-top: 5px; width: 100%; }
     </style>
 </head>
 <body>
 
 <header>
-    <h1>IPTV 轉換管理系統</h1>
+    <h1>IPTV 轉換管理系統 (同步優先版)</h1>
     <div>
         <span id="dot" class="status-dot"></span>
-        <small id="ruleStatus">正在偵測 all_rules.txt...</small>
+        <small id="ruleStatus">初始化...</small>
     </div>
 </header>
 
 <main>
     <div class="left-panel">
         <div class="card">
-            <strong>1. 來源上傳</strong>
-            <input type="file" id="tvInput" onchange="loadTvFile(this)" style="margin: 10px 0;">
-            <small id="tvStatus">等待選擇 tv.txt</small>
+            <strong>1. 規則管理</strong>
+            <input type="file" id="ruleFileManual" style="display:none;" onchange="loadRuleManual(this)">
+            <button class="btn-update" onclick="document.getElementById('ruleFileManual').click()">📂 手動更新規則檔</button>
+            <small style="display:block; margin-top:5px; color:#888;">優先讀取伺服器 all_rules.txt</small>
+        </div>
+
+        <div class="card">
+            <strong>2. 來源上傳 (txt/m3u)</strong>
+            <input type="file" accept=".txt,.m3u" onchange="loadTvFile(this)" style="margin: 10px 0; width:100%;">
             <button class="btn-main" onclick="startConvert()">立即轉換</button>
         </div>
-        
-        <div class="card" style="flex: 1; display: flex; flex-direction: column;">
-            <strong>2. 操作日誌 (Log)</strong>
-            <div id="log"></div>
-        </div>
+        <div id="log"></div>
     </div>
 
     <div class="right-panel">
         <div class="preview-container">
-            <div class="preview-box">
-                <strong>TXT 預覽</strong>
+            <div style="display:flex; flex-direction:column;">
+                <small>TXT 預覽</small>
                 <textarea id="txtPreview" readonly></textarea>
-                <button class="btn-download" onclick="downloadFile('iptv', 'txt', txtOutput)">📥 下載 .txt</button>
+                <button class="btn-download" onclick="download('txt')">📥 下載 TXT</button>
             </div>
-            <div class="preview-box">
-                <strong>M3U 預覽</strong>
+            <div style="display:flex; flex-direction:column;">
+                <small>M3U 預覽</small>
                 <textarea id="m3uPreview" readonly></textarea>
-                <button class="btn-download" onclick="downloadFile('iptv', 'm3u', m3uOutput)">📥 下載 .m3u</button>
+                <button class="btn-download" onclick="download('m3u')">📥 下載 M3U</button>
             </div>
         </div>
     </div>
 </main>
 
 <script>
-    let tvContent = null;
-    let keepSet = new Set(), categoryMap = [], sortRef = {};
+    let tvContent = null, keepSet = new Set(), categoryMap = [], sortRef = {};
     let txtOutput = "", m3uOutput = "";
 
-    // 啟動自動加載
     window.onload = function() {
-        addLog("連線至 GitHub 讀取 all_rules.txt...");
-        fetch('all_rules.txt', { cache: "no-store" })
-            .then(res => {
-                if (!res.ok) throw new Error("讀取失敗：請確認檔案存在");
-                return res.text();
-            })
-            .then(text => {
-                parseAllRules(text);
-                document.getElementById("dot").className = "status-dot status-ok";
-                document.getElementById("ruleStatus").textContent = "規則已就緒";
-                addLog("規則載入成功：保留 " + keepSet.size + " 項", "success");
-            })
-            .catch(err => {
-                addLog(err.message, "error");
-                document.getElementById("ruleStatus").textContent = "規則載入失敗";
-            });
+        initRuleFlow();
     };
 
-    function addLog(msg, type = "normal") {
-        const div = document.createElement("div");
-        if(type === "error") div.style.color = "#ff7675";
-        if(type === "success") div.style.color = "#55efc4";
-        div.textContent = `[${new Date().toLocaleTimeString().split(' ')[0]}] ${msg}`;
-        const l = document.getElementById("log");
-        l.appendChild(div);
-        l.scrollTop = l.scrollHeight;
+    // 規則載入核心流
+    async function initRuleFlow() {
+        addLog("正在連線抓取伺服器 all_rules.txt...");
+        
+        try {
+            const res = await fetch('all_rules.txt', { cache: "no-store" });
+            if (!res.ok) throw new Error("File not found");
+            const text = await res.text();
+            
+            parseRules(text);
+            localStorage.setItem('all_rules_cache', text); // 同步更新快取
+            setUIState("dot-green", "規則已就緒 (最新)");
+            addLog("伺服器規則抓取成功 (綠燈)", "success");
+        } catch (err) {
+            addLog("無法連線伺服器，嘗試讀取本地記憶...", "error");
+            const cached = localStorage.getItem('all_rules_cache');
+            if (cached) {
+                parseRules(cached);
+                setUIState("dot-blue", "規則已就緒 (快取)");
+                addLog("已載入上次使用的記憶規則 (藍燈)", "success");
+            } else {
+                setUIState("dot-red", "規則缺失，請手動更新");
+                addLog("找不到任何規則，請手動選擇 all_rules.txt", "error");
+            }
+        }
     }
 
-    function parseAllRules(text) {
+    function setUIState(dotClass, msg) {
+        const dot = document.getElementById("dot");
+        dot.className = "status-dot " + dotClass;
+        document.getElementById("ruleStatus").textContent = msg;
+    }
+
+    function loadRuleManual(input) {
+        const file = input.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = e => {
+            const text = e.target.result;
+            localStorage.setItem('all_rules_cache', text);
+            parseRules(text);
+            setUIState("dot-green", "規則已手動更新");
+            addLog(`手動更新規則成功: ${file.name}`, "success");
+            if (tvContent) startConvert(); // 如果已經有頻道源，自動重跑
+        };
+        reader.readAsText(file, "utf-8");
+    }
+
+    function parseRules(text) {
+        keepSet.clear(); categoryMap = []; sortRef = {};
         const lines = text.split(/\r?\n/);
         let section = "";
         let curCat = null, curSortCat = null;
@@ -144,82 +151,94 @@
         });
     }
 
+    function addLog(msg, type) {
+        const div = document.createElement("div");
+        if(type === "error") div.style.color = "#ff7675";
+        if(type === "success") div.style.color = "#55efc4";
+        div.textContent = `[${new Date().toLocaleTimeString().split(' ')[0]}] ${msg}`;
+        const l = document.getElementById("log");
+        l.appendChild(div);
+        l.scrollTop = l.scrollHeight;
+    }
+
     function loadTvFile(input) {
         const file = input.files[0];
         if (!file) return;
         const reader = new FileReader();
-        reader.onload = (e) => {
+        reader.onload = e => {
             tvContent = e.target.result;
-            document.getElementById("tvStatus").textContent = "✅ 已載入 " + file.name;
-            addLog("頻道源載入成功");
+            addLog(`頻道源載入成功: ${file.name}`);
         };
         reader.readAsText(file, "utf-8");
     }
 
-    function channelSorter(a, b, catName) {
-        const refList = sortRef[catName] || [];
-        let idxA = refList.findIndex(k => a.upper.includes(k));
-        let idxB = refList.findIndex(k => b.upper.includes(k));
-        if (idxA !== -1 && idxA === idxB) return a.name.localeCompare(b.name, 'zh-Hant', { numeric: true });
-        if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-        if (idxA !== -1) return -1;
-        if (idxB !== -1) return 1;
-        return a.name.localeCompare(b.name, 'zh-Hant', { numeric: true });
-    }
-
     function startConvert() {
-        if (!tvContent || keepSet.size === 0) return addLog("錯誤：資料不齊全", "error");
-        addLog("處理中...");
-        const lines = tvContent.split(/\r?\n/);
-        let results = {}, finalCount = 0;
-
-        lines.forEach(line => {
-            line = line.trim();
-            if (!line || line.includes("#genre#")) return;
-            const parts = line.split(",");
-            if (parts.length < 2) return;
-            const nameRaw = parts[0].trim(), url = parts[1].trim(), nameUpper = nameRaw.toUpperCase();
-
-            let isKept = false;
-            for (let k of keepSet) { if (nameUpper.includes(k)) { isKept = true; break; } }
-            if (!isKept) return;
-
-            let foundCat = "其他";
-            for (let cat of categoryMap) {
-                if (cat.keywords.some(kw => nameUpper.includes(kw))) { foundCat = cat.name; break; }
+        if (!tvContent || keepSet.size === 0) return addLog("錯誤：規則或頻道源未就緒", "error");
+        
+        let sourceData = [];
+        if (tvContent.trim().startsWith("#EXTM3U")) {
+            const lines = tvContent.split(/\r?\n/);
+            for (let i=0; i<lines.length; i++) {
+                if (lines[i].startsWith("#EXTINF")) {
+                    const name = lines[i].split(",").pop().trim();
+                    const url = lines[i+1]?.trim() || "";
+                    if (url && !url.startsWith("#")) { sourceData.push({name, url}); i++; }
+                }
             }
-            if (!results[foundCat]) results[foundCat] = [];
-            results[foundCat].push({ name: nameRaw, url: url, upper: nameUpper });
+        } else {
+            sourceData = tvContent.split(/\r?\n/).map(l => {
+                const p = l.split(",");
+                return p.length >= 2 ? {name: p[0].trim(), url: p[1].trim()} : null;
+            }).filter(x => x && !x.url.includes("#genre#"));
+        }
+
+        let results = {}, seenUrls = new Set(), finalCount = 0;
+        sourceData.forEach(item => {
+            if (seenUrls.has(item.url)) return;
+            const up = item.name.toUpperCase();
+            let keep = false;
+            for (let k of keepSet) { if (up.includes(k)) { keep = true; break; } }
+            if (!keep) return;
+
+            seenUrls.add(item.url);
+            let cat = "其他";
+            for (let c of categoryMap) { if (c.keywords.some(k => up.includes(k))) { cat = c.name; break; } }
+            if (!results[cat]) results[cat] = [];
+            results[cat].push({name: item.name, url: item.url, up});
             finalCount++;
         });
 
         txtOutput = ""; m3uOutput = "#EXTM3U\n";
-        categoryMap.forEach(cat => {
-            if (results[cat.name]) {
-                results[cat.name].sort((a, b) => channelSorter(a, b, cat.name));
-                txtOutput += `${cat.name},#genre#\n`;
-                results[cat.name].forEach(i => {
-                    txtOutput += `${i.name},${i.url}\n`;
-                    m3uOutput += `#EXTINF:-1 group-title="${cat.name}",${i.name}\n${i.url}\n`;
+        categoryMap.forEach(c => {
+            if (results[c.name]) {
+                const ref = sortRef[c.name] || [];
+                results[c.name].sort((a,b) => {
+                    let iA = ref.findIndex(k => a.up.includes(k)), iB = ref.findIndex(k => b.up.includes(k));
+                    if (iA !== -1 && iA === iB) return a.name.localeCompare(b.name, 'zh-Hant', {numeric:true});
+                    if (iA !== -1 && iB !== -1) return iA - iB;
+                    return (iA !== -1) ? -1 : (iB !== -1) ? 1 : a.name.localeCompare(b.name, 'zh-Hant', {numeric:true});
                 });
-                delete results[cat.name];
+                txtOutput += `${c.name},#genre#\n`;
+                results[c.name].forEach(i => {
+                    txtOutput += `${i.name},${i.url}\n`;
+                    m3uOutput += `#EXTINF:-1 group-title="${c.name}",${i.name}\n${i.url}\n`;
+                });
             }
         });
         document.getElementById("txtPreview").value = txtOutput;
         document.getElementById("m3uPreview").value = m3uOutput;
-        addLog(`成功！共 ${finalCount} 個頻道`, "success");
+        addLog(`轉換完成！共 ${finalCount} 個頻道`, "success");
     }
 
-    function downloadFile(prefix, ext, content) {
+    function download(ext) {
+        const content = ext === 'txt' ? txtOutput : m3uOutput;
         if (!content) return;
-        const now = new Date();
-        const ts = now.getFullYear() + String(now.getMonth() + 1).padStart(2, '0') + String(now.getDate()).padStart(2, '0') + "_" + String(now.getHours()).padStart(2, '0') + String(now.getMinutes()).padStart(2, '0');
-        const filename = `${prefix}_${ts}.${ext}`;
-        const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
-        const link = document.createElement("a");
-        link.href = URL.createObjectURL(blob);
-        link.download = filename;
-        link.click();
+        const ts = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14);
+        const blob = new Blob([content], {type: "text/plain;charset=utf-8"});
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `iptv_${ts}.${ext}`;
+        a.click();
     }
 </script>
 </body>
