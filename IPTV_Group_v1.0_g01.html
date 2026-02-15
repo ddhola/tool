@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>IPTV 轉換工具 - GitHub 自動化版</title>
+    <style>
+        body { font-family: "Microsoft JhengHei", sans-serif; margin: 20px; background: #f0f2f5; color: #333; }
+        .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); max-width: 1100px; margin: auto; }
+        h1 { color: #1a73e8; text-align: center; border-bottom: 2px solid #e8eaed; padding-bottom: 15px; }
+        .grid-header { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+        .section { border: 1px solid #e0e0e0; padding: 15px; border-radius: 8px; background: #fafafa; }
+        .status { font-weight: bold; padding: 6px; border-radius: 4px; display: inline-block; font-size: 0.85em; margin-top: 5px; }
+        .waiting { background: #eee; color: #666; border: 1px solid #ddd; }
+        .ok { background: #e6fffa; color: #38a169; border: 1px solid #38a169; }
+        .err { background: #fff5f5; color: #e53e3e; border: 1px solid #feb2b2; }
+        #log { background: #2d3436; color: #dfe6e9; padding: 15px; height: 160px; overflow-y: auto; border-radius: 6px; font-family: monospace; font-size: 13px; margin: 15px 0; line-height: 1.5; }
+        textarea { width: 100%; height: 350px; font-family: Consolas, monospace; font-size: 12px; padding: 10px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+        button { padding: 12px; cursor: pointer; border-radius: 6px; border: none; font-weight: bold; transition: 0.3s; }
+        .btn-main { background: #1a73e8; color: white; width: 100%; font-size: 1.1em; }
+        .btn-download { background: #34a853; color: white; width: 100%; margin-top: 10px; }
+        .btn-main:hover { background: #1557b0; }
+        .btn-download:hover { background: #2d8e47; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h1>IPTV 轉換工具 (GitHub 規則整合版)</h1>
+
+    <div class="grid-header">
+        <div class="section">
+            <strong>1. 伺服器規則檔 (all_rules.txt)</strong>
+            <div id="ruleStatus" class="status waiting">正在連線至 GitHub 讀取規則...</div>
+        </div>
+        <div class="section">
+            <strong>2. 手動上傳頻道源 (tv.txt)</strong>
+            <input type="file" id="tvInput" onchange="loadTvFile(this)" style="margin-top:10px;">
+            <div id="tvStatus" class="status waiting">等待來源檔案</div>
+        </div>
+    </div>
+
+    <button class="btn-main" onclick="startConvert()">立即執行轉換</button>
+    <div id="log"></div>
+
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+        <div>
+            <small>TXT 結果預覽</small>
+            <textarea id="txtPreview" readonly></textarea>
+            <button class="btn-download" onclick="downloadFile('iptv', 'txt', txtOutput)">📥 下載帶時間戳 TXT</button>
+        </div>
+        <div>
+            <small>M3U 結果預覽</small>
+            <textarea id="m3uPreview" readonly></textarea>
+            <button class="btn-download" onclick="downloadFile('iptv', 'm3u', m3uOutput)">📥 下載帶時間戳 M3U</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let tvContent = null;
+    let keepSet = new Set(), categoryMap = [], sortRef = {};
+    let txtOutput = "", m3uOutput = "";
+
+    // 頁面啟動：自動從同目錄 fetch all_rules.txt
+    window.onload = function() {
+        addLog("正在從 GitHub 伺服器載入 all_rules.txt...");
+        fetch('all_rules.txt', { cache: "no-store" }) // 避免瀏覽器快取舊規則
+            .then(res => {
+                if (!res.ok) throw new Error("讀取規則檔失敗，請確認 all_rules.txt 是否存在於同目錄");
+                return res.text();
+            })
+            .then(text => {
+                parseAllRules(text);
+                updateUI("ruleStatus", "✅ 規則已自動載入成功", "ok");
+                addLog("規則載入成功：保留 " + keepSet.size + " 項, 分類 " + categoryMap.length + " 組", "success");
+            })
+            .catch(err => {
+                updateUI("ruleStatus", "❌ 載入失敗：" + err.message, "err");
+                addLog(err.message, "error");
+            });
+    };
+
+    function addLog(msg, type = "normal") {
+        const div = document.createElement("div");
+        if(type === "error") div.style.color = "#ff7675";
+        if(type === "success") div.style.color = "#55efc4";
+        div.textContent = `[${new Date().toLocaleTimeString()}] > ${msg}`;
+        const l = document.getElementById("log");
+        l.appendChild(div);
+        l.scrollTop = l.scrollHeight;
+    }
+
+    function updateUI(id, text, className) {
+        const el = document.getElementById(id);
+        el.className = "status " + className;
+        el.textContent = text;
+    }
+
+    function parseAllRules(text) {
+        const lines = text.split(/\r?\n/);
+        let section = "";
+        let curCat = null, curSortCat = null;
+
+        lines.forEach(l => {
+            let line = l.trim();
+            if (!line || line.startsWith("#")) return;
+
+            if (line === "[KEEP_LIST]") { section = "KEEP"; return; }
+            if (line === "[CATEGORY_LIST]") { section = "CATEGORY"; return; }
+            if (line === "[SORT_LIST]") { section = "SORT"; return; }
+
+            if (section === "KEEP") {
+                keepSet.add(line.toUpperCase());
+            } else if (section === "CATEGORY") {
+                if (line.includes("#genre#")) {
+                    curCat = { name: line.split(",")[0].trim(), keywords: [] };
+                    categoryMap.push(curCat);
+                } else if (curCat) curCat.keywords.push(line.toUpperCase());
+            } else if (section === "SORT") {
+                if (line.includes("#genre#")) {
+                    curSortCat = line.split(",")[0].trim();
+                    sortRef[curSortCat] = [];
+                } else if (curSortCat) {
+                    sortRef[curSortCat].push(line.toUpperCase());
+                }
+            }
+        });
+    }
+
+    function loadTvFile(input) {
+        const file = input.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            tvContent = e.target.result;
+            updateUI("tvStatus", "✅ 來源已載入", "ok");
+            addLog("頻道來源載入成功 (" + file.name + ")");
+        };
+        reader.readAsText(file, "utf-8");
+    }
+
+    function channelSorter(a, b, catName) {
+        const refList = sortRef[catName] || [];
+        let idxA = refList.findIndex(k => a.upper.includes(k));
+        let idxB = refList.findIndex(k => b.upper.includes(k));
+
+        if (idxA !== -1 && idxA === idxB) return a.name.localeCompare(b.name, 'zh-Hant', { numeric: true });
+        if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+        if (idxA !== -1) return -1;
+        if (idxB !== -1) return 1;
+
+        const isAAscii = /^[a-zA-Z0-9]/.test(a.name);
+        const isBAscii = /^[a-zA-Z0-9]/.test(b.name);
+        if (isAAscii && !isBAscii) return -1;
+        if (!isAAscii && isBAscii) return 1;
+        return a.name.localeCompare(b.name, 'zh-Hant', { numeric: true });
+    }
+
+    function startConvert() {
+        if (!tvContent || keepSet.size === 0) return addLog("錯誤：規則尚未載入或來源未選取", "error");
+        
+        addLog("正在處理過濾與二次排序...");
+        const lines = tvContent.split(/\r?\n/);
+        let results = {};
+        let finalCount = 0;
+
+        lines.forEach(line => {
+            line = line.trim();
+            if (!line || line.includes("#genre#")) return;
+            const parts = line.split(",");
+            if (parts.length < 2) return;
+
+            const nameRaw = parts[0].trim(), url = parts[1].trim(), nameUpper = nameRaw.toUpperCase();
+
+            let isKept = false;
+            for (let k of keepSet) { if (nameUpper.includes(k)) { isKept = true; break; } }
+            if (!isKept) return;
+
+            let foundCat = "其他";
+            for (let cat of categoryMap) {
+                if (cat.keywords.some(kw => nameUpper.includes(kw))) { foundCat = cat.name; break; }
+            }
+
+            if (!results[foundCat]) results[foundCat] = [];
+            results[foundCat].push({ name: nameRaw, url: url, upper: nameUpper });
+            finalCount++;
+        });
+
+        txtOutput = ""; m3uOutput = "#EXTM3U\n";
+        categoryMap.forEach(cat => {
+            if (results[cat.name]) {
+                results[cat.name].sort((a, b) => channelSorter(a, b, cat.name));
+                txtOutput += `${cat.name},#genre#\n`;
+                results[cat.name].forEach(i => {
+                    txtOutput += `${i.name},${i.url}\n`;
+                    m3uOutput += `#EXTINF:-1 group-title="${cat.name}",${i.name}\n${i.url}\n`;
+                });
+                delete results[cat.name];
+            }
+        });
+
+        for (let cn in results) {
+            results[cn].sort((a, b) => channelSorter(a, b, cn));
+            txtOutput += `${cn},#genre#\n`;
+            results[cn].forEach(i => {
+                txtOutput += `${i.name},${i.url}\n`;
+                m3uOutput += `#EXTINF:-1 group-title="${cn}",${i.name}\n${i.url}\n`;
+            });
+        }
+
+        document.getElementById("txtPreview").value = txtOutput;
+        document.getElementById("m3uPreview").value = m3uOutput;
+        addLog(`轉換成功！共提取出 ${finalCount} 個頻道`, "success");
+    }
+
+    function downloadFile(prefix, ext, content) {
+        if (!content) return alert("請先執行轉換！");
+        const now = new Date();
+        const ts = now.getFullYear() + String(now.getMonth() + 1).padStart(2, '0') + String(now.getDate()).padStart(2, '0') + "_" + String(now.getHours()).padStart(2, '0') + String(now.getMinutes()).padStart(2, '0') + String(now.getSeconds()).padStart(2, '0');
+        const filename = `${prefix}_${ts}.${ext}`;
+        const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = filename;
+        link.click();
+        URL.revokeObjectURL(link.href);
+        addLog("檔案已下載: " + filename, "success");
+    }
+</script>
+</body>
+</html>
