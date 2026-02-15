@@ -1,129 +1,252 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>繁簡轉換專業工具</title>
-    <script src="https://cdn.jsdelivr.net/npm/opencc-js@1.0.5/dist/umd/full.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jschardet/3.0.0/jschardet.min.js"></script>
-    <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.6; max-width: 1000px; margin: 0 auto; padding: 20px; background-color: #f5f5f7; }
-        .container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
-        h1 { color: #333; text-align: center; }
-        .section { margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 20px; }
-        textarea { width: 100%; height: 200px; padding: 10px; border: 1px solid #ccc; border-radius: 8px; box-sizing: border-box; font-size: 14px; }
-        .controls { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin: 15px 0; }
-        button { padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.3s; }
-        .btn-convert { background-color: #007aff; color: white; }
-        .btn-download { background-color: #34c759; color: white; }
-        .btn-clear { background-color: #ff3b30; color: white; }
-        input[type="file"] { border: 1px dashed #ccc; padding: 10px; width: 100%; box-sizing: border-box; }
-        .output-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 20px; }
-        .output-box { background: #fafafa; padding: 15px; border-radius: 8px; border: 1px solid #ddd; }
-        .label { font-weight: bold; margin-bottom: 8px; display: block; color: #555; }
-        pre { white-space: pre-wrap; word-wrap: break-word; font-size: 14px; max-height: 300px; overflow-y: auto; background: #fff; padding: 10px; border: 1px solid #eee; }
-    </style>
+<meta charset="UTF-8">
+<title>繁簡中文轉換工具</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="https://cdn.jsdelivr.net/npm/opencc-js@1.0.5/dist/umd/full.js"></script>
+<style>
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background: #f4f6f8;
+    margin: 0;
+    padding: 20px;
+  }
+  .container {
+    max-width: 1000px;
+    margin: auto;
+  }
+  h1 {
+    text-align: center;
+    color: #2c3e50;
+    margin-bottom: 10px;
+  }
+  .drop-zone {
+    border: 3px dashed #aaa;
+    border-radius: 12px;
+    padding: 40px;
+    background: white;
+    text-align: center;
+    cursor: pointer;
+    transition: 0.2s;
+    color: #555;
+    margin-bottom: 15px;
+  }
+  .drop-zone.dragover {
+    border-color: #3498db;
+    background: #eaf4ff;
+  }
+  #status {
+    text-align: center;
+    color: #e67e22;
+    font-weight: bold;
+    min-height: 1.5em;
+    margin-bottom: 10px;
+  }
+  textarea {
+    width: 100%;
+    min-height: 240px;
+    margin-top: 10px;
+    padding: 12px;
+    font-family: Consolas, monospace;
+    font-size: 14px;
+    border-radius: 6px;
+    border: 1px solid #ccc;
+    box-sizing: border-box;
+  }
+  button {
+    padding: 10px 18px;
+    margin: 5px 4px 0 0;
+    border: none;
+    border-radius: 6px;
+    color: white;
+    cursor: pointer;
+    font-weight: 500;
+  }
+  .btn-main { background: #3498db; }
+  .btn-paste { background: #8e44ad; }
+  .btn-copy { background: #27ae60; }
+  .btn-clear { background: #e74c3c; }
+  .btn-main:hover { opacity: 0.9; }
+
+  .info {
+    text-align: center;
+    color: #7f8c8d;
+    margin-top: 20px;
+    font-size: 0.9em;
+    line-height: 1.6;
+  }
+</style>
 </head>
 <body>
 
 <div class="container">
-    <h1>繁簡轉換工具</h1>
+  <h1>繁簡中文專業轉換</h1>
+  
+  <div id="status">準備就緒</div>
 
-    <div class="section">
-        <span class="label">Step 1: 輸入文字 或 上傳檔案 (支援多檔合併)</span>
-        <textarea id="inputText" placeholder="請在此貼上文字..."></textarea>
-        <div class="controls">
-            <input type="file" id="fileInput" multiple accept=".txt,.md,.csv">
-        </div>
-    </div>
+  <div class="drop-zone" id="dropZone">
+    拖放多個文字檔 (.txt / .md) 到這裡<br>
+    或點擊選擇檔案 (支援自動辨識編碼與多檔合併)
+    <input type="file" id="fileInput" multiple hidden>
+  </div>
 
-    <div class="section">
-        <span class="label">Step 2: 操作轉換</span>
-        <div class="controls">
-            <button class="btn-convert" onclick="processConversion()">執行轉換</button>
-            <button class="btn-clear" onclick="clearAll()">清空全部</button>
-        </div>
-    </div>
+  <div>
+    <button class="btn-main" onclick="fileInput.click()">選擇檔案</button>
+    <button class="btn-paste" onclick="pasteFromClipboard()">從剪貼簿貼上</button>
+    <button class="btn-copy" onclick="copyResult()">複製結果</button>
+    <button class="btn-main" style="background: #2c3e50;" onclick="downloadFile('tw')">⬇ 下載繁體檔</button>
+    <button class="btn-main" style="background: #2c3e50;" onclick="downloadFile('cn')">⬇ 下載簡體檔</button>
+    <button class="btn-clear" onclick="clearAll()">清除</button>
+  </div>
 
-    <div class="output-grid">
-        <div class="output-box">
-            <span class="label">繁體中文結果 (Traditional)</span>
-            <pre id="twOutput">等待轉換...</pre>
-            <button class="btn-download" onclick="downloadFile('tw')">下載繁體檔</button>
-        </div>
-        <div class="output-box">
-            <span class="label">簡體中文結果 (Simplified)</span>
-            <pre id="cnOutput">等待轉換...</pre>
-            <button class="btn-download" onclick="downloadFile('cn')">下載簡體檔</button>
-        </div>
-    </div>
+  <textarea id="input" placeholder="讀取的原始內容..."></textarea>
+  <textarea id="output" placeholder="轉換結果將顯示於此..."></textarea>
+
+  <div class="info">
+    自動辨識編碼 (UTF-8 / GBK / Big5)｜支援多檔合併<br>
+    採用 OpenCC 轉換引擎：支援台灣慣用語轉換
+  </div>
 </div>
 
 <script>
-    // 初始化轉換器
-    const toTw = OpenCC.Converter({ from: 'cn', to: 'tw' });
-    const toCn = OpenCC.Converter({ from: 'tw', to: 'cn' });
+// 初始化 OpenCC 轉換器
+const toTW = OpenCC.Converter({ from: 'cn', to: 'twp' }); // 轉繁體(含台灣用語)
+const toCN = OpenCC.Converter({ from: 'tw', to: 'cn' });  // 轉簡體
 
-    // 處理檔案上傳與自動偵測編碼
-    document.getElementById('fileInput').addEventListener('change', async function(e) {
-        const files = e.target.files;
-        let combinedText = "";
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+const input = document.getElementById('input');
+const output = document.getElementById('output');
+const statusDiv = document.getElementById('status');
 
-        for (let file of files) {
-            const buffer = await file.arrayBuffer();
-            const uint8Array = new Uint8Array(buffer);
-            
-            // 使用 jschardet 偵測編碼
-            const detected = jschardet.detect(uint8Array);
-            const encoding = detected.encoding || 'UTF-8';
-            
-            const decoder = new TextDecoder(encoding);
-            const text = decoder.decode(uint8Array);
-            
-            combinedText += (combinedText ? "\n\n--- 檔案分界線 ---\n\n" : "") + text;
-        }
-        
-        document.getElementById('inputText').value = combinedText;
-    });
+/* ---------- 核心：自動解碼功能 (保留原方案) ---------- */
+function autoDecode(arrayBuffer) {
+  const encodings = ["utf-8", "gbk", "big5"];
+  let bestText = "";
+  let bestEncoding = "utf-8";
+  let minInvalid = Infinity;
 
-    function processConversion() {
-        const input = document.getElementById('inputText').value;
-        if (!input) {
-            alert("請先輸入文字或上傳檔案");
-            return;
-        }
-
-        // 執行轉換
-        const twText = toTw(input);
-        const cnText = toCn(input);
-
-        // 顯示結果
-        document.getElementById('twOutput').textContent = twText;
-        document.getElementById('cnOutput').textContent = cnText;
+  for (let enc of encodings) {
+    try {
+      const decoder = new TextDecoder(enc, { fatal: true });
+      const text = decoder.decode(arrayBuffer);
+      const invalidCount = (text.match(/\ufffd/g) || []).length;
+      
+      if (invalidCount < minInvalid) {
+        minInvalid = invalidCount;
+        bestText = text;
+        bestEncoding = enc;
+      }
+      if (invalidCount === 0) break; 
+    } catch (e) {
+      continue;
     }
+  }
+  return { text: bestText, encoding: bestEncoding };
+}
 
-    function downloadFile(type) {
-        const content = document.getElementById(type === 'tw' ? 'twOutput' : 'cnOutput').textContent;
-        if (content === "等待轉換...") {
-            alert("請先執行轉換再下載");
-            return;
-        }
+/* ---------- 拖放與檔案處理 (保留原方案) ---------- */
+['dragenter','dragover'].forEach(e =>
+  dropZone.addEventListener(e, ev => {
+    ev.preventDefault();
+    dropZone.classList.add('dragover');
+  })
+);
+['dragleave','drop'].forEach(e =>
+  dropZone.addEventListener(e, ev => {
+    ev.preventDefault();
+    dropZone.classList.remove('dragover');
+  })
+);
 
-        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `converted_${type}_${new Date().getTime()}.txt`;
-        link.click();
-        URL.revokeObjectURL(url);
+dropZone.onclick = () => fileInput.click();
+dropZone.ondrop = e => handleFiles(e.dataTransfer.files);
+fileInput.onchange = e => handleFiles(e.target.files);
+
+function handleFiles(fileList) {
+  if (!fileList || fileList.length === 0) return;
+  const files = Array.from(fileList);
+  input.value = '';
+  let index = 0;
+
+  function readNext() {
+    if (index >= files.length) {
+      statusDiv.textContent = `✅ 讀取完成 (${files.length} 個檔案)，正在轉換...`;
+      convert('tw'); // 預設先轉繁體顯示
+      return;
     }
+    const file = files[index++];
+    const reader = new FileReader();
+    reader.onload = e => {
+      const result = autoDecode(e.target.result);
+      input.value += (input.value ? '\n' : '') + result.text.trim();
+      statusDiv.textContent = `正在讀取 (${index}/${files.length}) - 編碼: ${result.encoding.toUpperCase()}`;
+      readNext();
+    };
+    reader.readAsArrayBuffer(file);
+  }
+  readNext();
+}
 
-    function clearAll() {
-        document.getElementById('inputText').value = '';
-        document.getElementById('twOutput').textContent = '等待轉換...';
-        document.getElementById('cnOutput').textContent = '等待轉換...';
-        document.getElementById('fileInput').value = '';
+/* ---------- 轉換邏輯 (替換為 OpenCC) ---------- */
+function convert(targetType) {
+  const text = input.value.trim();
+  if (!text) return;
+  
+  if (targetType === 'tw') {
+    output.value = toTW(text);
+    statusDiv.textContent = "✅ 已完成轉換：至繁體 (台灣慣用語)";
+  } else {
+    output.value = toCN(text);
+    statusDiv.textContent = "✅ 已完成轉換：至簡體";
+  }
+}
+
+/* ---------- 工具功能 ---------- */
+async function pasteFromClipboard() {
+  try {
+    const text = await navigator.clipboard.readText();
+    if (text.trim()) {
+      input.value = text.trim();
+      convert('tw'); 
+      statusDiv.textContent = "📋 已貼上並完成繁體轉換";
     }
+  } catch (err) {
+    statusDiv.textContent = "❌ 無法讀取剪貼簿";
+  }
+}
+
+function downloadFile(type) {
+  const source = input.value.trim();
+  if (!source) return alert('沒有內容可以下載');
+  
+  const result = type === 'tw' ? toTW(source) : toCN(source);
+  const blob = new Blob([result], { type: 'text/plain;charset=utf-8;' });
+  const a = document.createElement('a');
+  const ts = new Date().getTime();
+  a.href = URL.createObjectURL(blob);
+  a.download = `converted_${type}_${ts}.txt`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function copyResult() {
+  if (!output.value) return;
+  output.select();
+  document.execCommand('copy');
+  statusDiv.textContent = "✨ 已複製結果到剪貼簿";
+}
+
+function clearAll() {
+  input.value = '';
+  output.value = '';
+  fileInput.value = '';
+  statusDiv.textContent = "已清除所有內容";
+}
+
+// 監聽輸入框變動即時更新（可選）
+input.oninput = () => { if(input.value) convert('tw'); };
 </script>
 
 </body>
