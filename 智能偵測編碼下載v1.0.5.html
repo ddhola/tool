@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智能偵測編碼讀取器 v1.0.5</title>
+    <style>
+        :root {
+            --bg-color: #f0f2f5;
+            --editor-bg: #1e1e1e;
+            --primary-color: #1a73e8;
+            --text-color: #d4d4d4;
+        }
+
+        body, html { 
+            margin: 0; padding: 0; height: 100%; overflow: hidden; 
+            font-family: "Microsoft JhengHei", sans-serif;
+            background-color: var(--bg-color);
+        }
+
+        .main-wrapper {
+            display: flex; flex-direction: column;
+            height: 100vh; padding: 15px; box-sizing: border-box;
+        }
+
+        .title-section { margin-bottom: 10px; }
+        .title-bar {
+            font-size: 24px; font-weight: bold; color: #1a73e8;
+            display: flex; align-items: center; gap: 8px; margin-bottom: 2px;
+        }
+        .strategy-info { font-size: 14px; color: #666; margin-bottom: 10px; }
+
+        .header {
+            display: flex; width: 100%; gap: 10px;
+            padding-bottom: 15px; align-items: center;
+        }
+
+        #urlInput {
+            flex-grow: 1; min-width: 0; padding: 10px 15px; 
+            border: 1px solid #ccc; border-radius: 4px; 
+            font-size: 16px; outline: none;
+        }
+
+        .btn-group { display: flex; gap: 8px; flex-shrink: 0; }
+
+        button {
+            padding: 10px 20px; background: var(--primary-color); 
+            color: white; border: none; border-radius: 4px; 
+            cursor: pointer; font-weight: bold; white-space: nowrap;
+        }
+
+        button.secondary { background: #5f6368; }
+        button:hover { filter: brightness(1.1); }
+
+        .content-area {
+            display: flex; flex: 1; gap: 12px; min-height: 0; 
+        }
+
+        .log-panel {
+            flex: 0 0 350px; 
+            display: flex; flex-direction: column;
+            background: #fff; border-radius: 8px; border: 1px solid #ddd; overflow: hidden;
+        }
+
+        .result-panel {
+            flex: 1; 
+            display: flex; flex-direction: column;
+            background: var(--editor-bg); border-radius: 8px; border: 1px solid #333; overflow: hidden;
+        }
+
+        .panel-label {
+            padding: 8px 12px; background: #eee; color: #555;
+            font-size: 12px; font-weight: bold; border-bottom: 1px solid #ddd;
+        }
+
+        .dark-label { background: #333; color: #aaa; border-bottom: 1px solid #444; }
+
+        pre {
+            margin: 0; padding: 15px; flex: 1;
+            overflow: auto; color: var(--text-color);
+            font-family: 'Consolas', monospace; line-height: 1.6; font-size: 14px;
+        }
+
+        #logEntries {
+            margin: 0; padding: 10px; flex: 1;
+            overflow-y: auto; list-style: none; font-size: 13px;
+            display: flex; flex-direction: column;
+        }
+
+        .log-item { border-bottom: 1px solid #f0f0f0; padding: 5px 0; word-break: break-all; }
+        .log-success { color: #2e7d32; font-weight: bold; }
+        .log-error { color: #d32f2f; }
+    </style>
+</head>
+<body>
+
+<div class="main-wrapper">
+    <div class="title-section">
+        <div class="title-bar">📄 智能偵測編碼讀取器 v1.0.5</div>
+        <div class="strategy-info">策略：優先直連 ➔ 模式 1 (CorsProxy) ➔ 模式 2 (AllOrigins) ➔ 自動合併斷行並轉換</div>
+    </div>
+
+    <div class="header">
+        <input type="text" id="urlInput" placeholder="請貼上網址..." value="http://alist.hopto.org/cat/BMW/tv2.txt">
+        <div class="btn-group">
+            <button onclick="startFetch()">讀取內容</button>
+            <button class="secondary" onclick="handleDownload('txt')">下載 TXT</button>
+            <button class="secondary" onclick="handleDownload('m3u')">下載 M3U</button>
+        </div>
+    </div>
+
+    <div class="content-area">
+        <div class="log-panel">
+            <div class="panel-label">SYSTEM LOG</div>
+            <ul id="logEntries">
+                <li class="log-item">系統就緒。</li>
+            </ul>
+        </div>
+        <div class="result-panel">
+            <div class="panel-label dark-label">FILE CONTENT</div>
+            <pre id="contentBody">等待讀取...</pre>
+        </div>
+    </div>
+</div>
+
+<script>
+    let currentRawText = "";
+
+    function addLog(msg, type = 'info') {
+        const logContainer = document.getElementById('logEntries');
+        const li = document.createElement('li');
+        li.className = `log-item log-${type}`;
+        const now = new Date().toLocaleTimeString('zh-TW', {hour12: false});
+        li.innerText = `[${now}] ${msg}`;
+        logContainer.appendChild(li);
+        logContainer.scrollTop = logContainer.scrollHeight;
+    }
+
+    // 將斷行的資料進行合併處理：如果一行只有名稱，下一行是網址，則合併
+    function cleanAndMergeLines(text) {
+        const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l !== "");
+        let merged = [];
+        
+        for (let i = 0; i < lines.length; i++) {
+            let current = lines[i];
+            // 判斷邏輯：如果當前行不含 http 但下一行以 http 開頭或包含逗號網址
+            if (i < lines.length - 1 && !current.includes("http") && (lines[i+1].startsWith(",") || lines[i+1].includes("http"))) {
+                let next = lines[i+1];
+                // 處理像 ",http..." 這種情況
+                if (next.startsWith(",")) {
+                    merged.push(current + next);
+                } else {
+                    merged.push(current + "," + next);
+                }
+                i++; // 跳過下一行
+            } else {
+                merged.push(current);
+            }
+        }
+        return merged.join("\n");
+    }
+
+    function decodeBuffer(arrayBuffer) {
+        const encodings = ["utf-8", "gbk", "big5"];
+        let bestText = "", bestEnc = "utf-8", minErrors = Infinity;
+        for (let enc of encodings) {
+            try {
+                const decoder = new TextDecoder(enc);
+                const text = decoder.decode(arrayBuffer);
+                const errorCount = (text.match(/\ufffd/g) || []).length;
+                if (errorCount < minErrors) {
+                    minErrors = errorCount;
+                    bestText = text;
+                    bestEnc = enc;
+                }
+                if (minErrors === 0) break;
+            } catch(e) {}
+        }
+        return { text: bestText, encoding: bestEnc };
+    }
+
+    async function loadText(url, step = 0) {
+        let targetUrl = url;
+        const order = [0, 1, 2]; 
+        const mode = order[step];
+        const proxies = { 1: `https://corsproxy.io/?`, 2: `https://api.allorigins.win/raw?url=` };
+
+        if (mode === 0) addLog(`嘗試直接連線...`, 'info');
+        else {
+            targetUrl = proxies[mode] + encodeURIComponent(url);
+            addLog(`連線失敗，嘗試模式 ${mode}...`, 'info');
+        }
+
+        try {
+            const controller = new AbortController();
+            const id = setTimeout(() => controller.abort(), 12000); 
+            const response = await fetch(targetUrl, { signal: controller.signal });
+            clearTimeout(id);
+
+            if (!response.ok) throw new Error(`HTTP ${response.status} 失敗`);
+            const buffer = await response.arrayBuffer();
+            const result = decodeBuffer(buffer);
+
+            // 讀取後立即進行斷行合併處理
+            currentRawText = cleanAndMergeLines(result.text);
+            document.getElementById('contentBody').innerText = currentRawText;
+            addLog(`讀取並合併成功！模式 ${mode}。編碼：${result.encoding.toUpperCase()}`, 'success');
+
+        } catch (err) {
+            addLog(`模式 ${mode} 失敗：${err.name === 'AbortError' ? '連線超時' : err.message}`, 'error');
+            if (step < order.length - 1) await loadText(url, step + 1);
+            else addLog("所有模式嘗試失敗。", "error");
+        }
+    }
+
+    function startFetch() {
+        const url = document.getElementById('urlInput').value.trim();
+        if (!url) return;
+        document.getElementById('contentBody').innerText = "載入中...";
+        loadText(url, 0);
+    }
+
+    function getTimestamp() {
+        const now = new Date();
+        const pad = (n) => n.toString().padStart(2, '0');
+        return now.getFullYear().toString() + pad(now.getMonth() + 1) + pad(now.getDate()) + pad(now.getHours()) + pad(now.getMinutes()) + pad(now.getSeconds());
+    }
+
+    function handleDownload(type) {
+        if (!currentRawText) return alert("請先讀取內容");
+        
+        let outputContent = currentRawText;
+        const isM3UContent = currentRawText.trim().startsWith("#EXTM3U");
+        const timestamp = getTimestamp();
+
+        if (type === 'm3u') {
+            if (!isM3UContent) {
+                let m3u = "#EXTM3U\n";
+                currentRawText.split('\n').forEach(line => {
+                    if (line.includes(',')) {
+                        const [name, link] = line.split(',');
+                        if (link) m3u += `#EXTINF:-1,${name.trim()}\n${link.trim()}\n`;
+                    }
+                });
+                outputContent = m3u;
+            }
+        } else if (type === 'txt') {
+            if (isM3UContent) {
+                let txt = "";
+                const lines = currentRawText.split('\n');
+                for (let i = 0; i < lines.length; i++) {
+                    if (lines[i].startsWith("#EXTINF")) {
+                        const name = lines[i].split(',')[1] || "未命名";
+                        const link = lines[i+1] ? lines[i+1].trim() : "";
+                        if (link && !link.startsWith("#")) { txt += `${name},${link}\n`; }
+                    }
+                }
+                outputContent = txt || currentRawText;
+            }
+        }
+
+        const blob = new Blob([outputContent], { type: "text/plain" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `playlist_${timestamp}.${type}`;
+        a.click();
+        addLog(`下載成功：playlist_${timestamp}.${type}`, 'success');
+    }
+</script>
+</body>
+</html>
