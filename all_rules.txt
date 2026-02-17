@@ -16,6 +16,8 @@ CINEMAWORLD
 CINEMAX
 Cinena World
 CN卡通
+ChanvelV
+Chanvel[V]
 DAZN
 Discovery
 Discovery HD
@@ -218,6 +220,10 @@ ELTA 2
 ELTA 3
 ELTA 4
 MoMo綜合臺
+MoMo
+Mo MO
+momo
+MOMO
 
 四臺,#genre#
 華視
@@ -310,6 +316,8 @@ nick
 動漫
 
 音樂旅遊生活,#genre#
+ChanvelV
+Chanvel[V]
 [V]
 旅遊
 美食
@@ -416,11 +424,10 @@ momo
 超視
 TVBS
 MUCH
+ELTA
 東森
 中天
 八大
 三立
-
-
-
-
+靖天
+龍華
