@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>IPTV 萬能檢查工具</title>
+    <style>
+        body { background-color: #2c3e50; color: white; font-family: sans-serif; padding: 20px; }
+        .card { background: #34495e; padding: 20px; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+        textarea { width: 100%; height: 150px; background: #ecf0f1; border: none; border-radius: 5px; padding: 10px; box-sizing: border-box; }
+        .console { background: #1e1e1e; color: #00ff00; padding: 15px; height: 300px; overflow-y: scroll; border-radius: 5px; font-family: 'Courier New', Courier, monospace; margin-top: 15px; border: 1px solid #555; }
+        button { background: #27ae60; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer; font-size: 16px; margin-top: 10px; }
+        button:hover { background: #2ecc71; }
+        .status-tag { font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<div class="card">
+    <h2>📡 IPTV 播放源批量深度檢查</h2>
+    <p>格式：頻道名稱,網址 (每行一個)</p>
+    <textarea id="iptvList" placeholder="東森新聞,http://..."></textarea>
+    <br>
+    <button onclick="startBatchCheck()">🚀 開始批量檢查 (連動本地引擎)</button>
+
+    <div class="console" id="logWindow">等待任務啟動...</div>
+</div>
+
+<script>
+    async function startBatchCheck() {
+        const logWindow = document.getElementById('logWindow');
+        const listText = document.getElementById('iptvList').value.trim();
+        
+        if (!listText) {
+            alert("請先貼上播放源清單！");
+            return;
+        }
+
+        const lines = listText.split('\n');
+        logWindow.innerHTML = "=== 正在連線本地引擎... ===\n";
+
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i].trim();
+            if (!line || !line.includes(',')) continue;
+
+            const [name, url] = line.split(',');
+            logWindow.innerHTML += `[${i+1}/${lines.length}] 正在分析: ${name}...\n`;
+            logWindow.scrollTop = logWindow.scrollHeight;
+
+            try {
+                // 呼叫你剛才跑起來的本地 Python (127.0.0.1:5000)
+                const response = await fetch('http://127.0.0.1:5000/scan', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: name, url: url })
+                });
+
+                const result = await response.json();
+                logWindow.innerHTML += `${result.msg}\n`;
+            } catch (error) {
+                logWindow.innerHTML += `❌ 錯誤: 無法連線至本地引擎。請確認 Python 視窗未關閉且已安裝 flask-cors。\n`;
+                break; // 停止後續檢查
+            }
+            logWindow.scrollTop = logWindow.scrollHeight;
+        }
+        logWindow.innerHTML += "\n✅ 批量檢查任務完成！";
+    }
+</script>
+
+</body>
+</html>
