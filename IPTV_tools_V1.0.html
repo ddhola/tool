@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>IPTV 全能工具箱 v3.7 - 終極整合版</title>
+    <script src="https://cdn.jsdelivr.net/npm/opencc-js@1.0.5/dist/umd/full.js"></script>
+    <style>
+        :root {
+            --primary: #3498db; --purple: #8e44ad; --success: #27ae60;
+            --danger: #e74c3c; --dark-grey: #34495e; --app-bg: #2c3e50; --editor-bg: #1e1e1e;
+        }
+        body, html { margin: 0; padding: 0; height: 100vh; background-color: var(--app-bg); font-family: "Microsoft JhengHei", sans-serif; overflow: hidden; }
+        
+        /* 版面佔 80%，下方留白 20% */
+        .main-layout { height: 80vh; display: flex; flex-direction: column; padding: 15px; box-sizing: border-box; }
+        .bottom-spacer { height: 20vh; background: transparent; }
+        
+        .container { max-width: 1600px; margin: 0 auto; width: 100%; height: 100%; display: flex; flex-direction: column; background: #f4f6f8; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+        #status { background: #fff3e0; color: #e67e22; text-align: center; padding: 5px; font-weight: bold; font-size: 14px; }
+        
+        /* 上方三層橫式佈局 */
+        .layer { flex-shrink: 0; padding: 0 15px; margin-bottom: 10px; }
+        .url-layer { display: flex; gap: 10px; margin-top: 10px; align-items: flex-start; }
+        .url-layer textarea { flex: 1; height: 60px; padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-family: Consolas, monospace; font-size: 12px; resize: none; }
+        
+        .drop-layer { 
+            border: 2px dashed #ccc; border-radius: 8px; padding: 12px; 
+            text-align: center; color: #666; background: #fff; cursor: pointer; 
+            margin: 0 15px 10px 15px; transition: 0.2s;
+        }
+        
+        .btn-layer { display: flex; gap: 8px; flex-wrap: wrap; }
+        button { padding: 8px 15px; border: none; border-radius: 6px; color: white; cursor: pointer; font-weight: bold; font-size: 13px; transition: opacity 0.2s; }
+        button:hover { opacity: 0.8; }
+        
+        .btn-blue { background: var(--primary); }
+        .btn-purple { background: var(--purple); }
+        .btn-green { background: var(--success); }
+        .btn-dark { background: var(--dark-grey); }
+        .btn-red { background: var(--danger); }
+        .btn-orange { background: #e67e22; }
+
+        /* 下方三欄直式佈局 */
+        .bottom-grid { display: flex; gap: 15px; flex: 1; min-height: 0; padding: 0 15px 15px 15px; }
+        .column { display: flex; flex-direction: column; height: 100%; flex: 1; }
+        label { font-weight: bold; margin-bottom: 5px; display: block; color: #2c3e50; font-size: 13px; }
+        
+        textarea.editor, .log-area { 
+            flex: 1; width: 100%; padding: 12px; 
+            font-family: 'Consolas', monospace; font-size: 13px; 
+            border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; 
+            background: var(--editor-bg); color: #d4d4d4; resize: none; overflow-y: auto; 
+        }
+        .log-area { background: #fff; color: #333; font-size: 12px; line-height: 1.5; }
+    </style>
+</head>
+<body>
+
+<div class="main-layout">
+    <div class="container">
+        <div id="status">系統就緒 - 支援多網址批次抓取與自動轉碼</div>
+        
+        <div class="layer url-layer">
+            <textarea id="urlInput" placeholder="請貼上網址，每行一個網址..."></textarea>
+            <button class="btn-blue" style="height: 60px;" onclick="batchFetch()">批次讀取網址</button>
+        </div>
+
+        <div class="drop-layer" id="dropZone" onclick="document.getElementById('fileInput').click()">
+            拖放 .m3u / .m3u8 / .txt 檔案到此處，或點擊選擇檔案 (支援多檔自動合併與轉碼)
+            <input type="file" id="fileInput" multiple hidden onchange="handleFiles(this.files)">
+        </div>
+
+        <div class="layer btn-layer">
+            <button class="btn-purple" onclick="pasteToSource()">從剪貼簿貼上</button>
+            <button class="btn-green" onclick="copyText('outputDisplay')">複製處理結果</button>
+            <button class="btn-orange" onclick="convertLanguage('tw')">轉繁體 (台灣慣用詞)</button>
+            <button class="btn-orange" onclick="convertLanguage('cn')">轉簡體</button>
+            <button class="btn-dark" onclick="downloadData('m3u')">⬇ 下載 M3U</button>
+            <button class="btn-dark" onclick="downloadData('txt')">⬇ 下載 TXT</button>
+            <button class="btn-red" onclick="clearAll()">清除全部</button>
+        </div>
+
+        <div class="bottom-grid">
+            <div class="column">
+                <label>SYSTEM LOG (運行日誌)</label>
+                <div id="logEntries" class="log-area">等待操作...</div>
+            </div>
+            <div class="column">
+                <label>SOURCE CONTENT (原始資料)</label>
+                <textarea id="sourceDisplay" class="editor" placeholder="讀取或貼上的原始內容會顯示在這裡..."></textarea>
+            </div>
+            <div class="column">
+                <label>CONVERTED RESULT (處理結果)</label>
+                <textarea id="outputDisplay" class="editor" placeholder="轉換後的結果將顯示於此..."></textarea>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="bottom-spacer"></div>
+
+<script>
+    const sourceEl = document.getElementById('sourceDisplay');
+    const outputEl = document.getElementById('outputDisplay');
+    const logEl = document.getElementById('logEntries');
+    const dropZone = document.getElementById('dropZone');
+    
+    const toTW = OpenCC.Converter({ from: 'cn', to: 'twp' });
+    const toCN = OpenCC.Converter({ from: 'tw', to: 'cn' });
+
+    function addLog(msg, color="#333") {
+        const now = new Date().toLocaleTimeString('zh-TW', {hour12: false});
+        logEl.innerHTML += `<div style="color:${color}">[${now}] ${msg}</div>`;
+        logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    /* ---------- 檔案拖放功能修復 ---------- */
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(e => {
+        dropZone.addEventListener(e, (ev) => { ev.preventDefault(); ev.stopPropagation(); }, false);
+    });
+
+    ['dragenter', 'dragover'].forEach(e => {
+        dropZone.addEventListener(e, () => dropZone.style.borderColor = "var(--primary)", false);
+    });
+
+    ['dragleave', 'drop'].forEach(e => {
+        dropZone.addEventListener(e, () => dropZone.style.borderColor = "#ccc", false);
+    });
+
+    dropZone.addEventListener('drop', (e) => { handleFiles(e.dataTransfer.files); }, false);
+
+    /* ---------- 智慧編碼與網址抓取 ---------- */
+    function smartDecode(buffer) {
+        const encs = ['utf-8', 'gbk', 'big5'];
+        for (let e of encs) {
+            try {
+                const dec = new TextDecoder(e, { fatal: true });
+                return dec.decode(buffer);
+            } catch (err) {}
+        }
+        return new TextDecoder('utf-8').decode(buffer);
+    }
+
+    async function batchFetch() {
+        const urls = document.getElementById('urlInput').value.split(/\n/).map(u => u.trim()).filter(u => u);
+        if (!urls.length) return alert("請輸入網址");
+        addLog(`開始讀取 ${urls.length} 個網址...`);
+        let combined = "";
+        for (let url of urls) {
+            const proxies = ["", "https://corsproxy.io/?", "https://api.allorigins.win/raw?url="];
+            let success = false;
+            for (let i = 0; i < proxies.length; i++) {
+                try {
+                    const res = await fetch(proxies[i] + (i === 2 ? encodeURIComponent(url) : url));
+                    if (!res.ok) throw Error();
+                    combined += (combined ? "\n" : "") + smartDecode(await res.arrayBuffer());
+                    addLog(`成功: ${url}`, "#27ae60");
+                    success = true; break;
+                } catch (e) { continue; }
+            }
+            if (!success) addLog(`失敗: ${url}`, "#e74c3c");
+        }
+        sourceEl.value = combined;
+        sourceEl.dispatchEvent(new Event('input'));
+    }
+
+    /* ---------- 格式轉換邏輯 ---------- */
+    sourceEl.addEventListener('input', () => {
+        const text = sourceEl.value.trim();
+        if (!text) return outputEl.value = "";
+        const isM3U = text.startsWith('#EXTM3U') || text.includes('#EXTINF');
+        outputEl.value = isM3U ? m3uToTxt(text) : txtToM3U(text);
+    });
+
+    function m3uToTxt(text) {
+        const lines = text.split(/\r?\n/);
+        const out = []; let title = "", group = ""; const seen = new Set();
+        lines.forEach(line => {
+            line = line.trim();
+            if (line.startsWith('#EXTINF')) {
+                const g = line.match(/group-title="([^"]+)"/i);
+                group = g ? g[1] : '未分類';
+                title = line.split(',').pop().trim();
+                if (!seen.has(group)) { out.push(`${group},#genre#`); seen.add(group); }
+            } else if (line.includes('://')) { if (title) out.push(`${title},${line}`); }
+        });
+        return out.join('\n');
+    }
+
+    function txtToM3U(text) {
+        const lines = text.split(/\r?\n/);
+        const out = ['#EXTM3U']; let group = '未分類';
+        lines.forEach(line => {
+            line = line.trim();
+            if (line.endsWith(',#genre#')) group = line.split(',')[0];
+            else if (line.includes(',')) {
+                const idx = line.lastIndexOf(',');
+                const t = line.substring(0, idx), u = line.substring(idx+1);
+                if (u.includes('://')) out.push(`#EXTINF:-1 group-title="${group}",${t}\n${u}`);
+            }
+        });
+        return out.join('\n');
+    }
+
+    /* ---------- 下載與繁簡轉換修復 ---------- */
+    function getTimestamp() {
+        const n = new Date();
+        return n.getFullYear() + (n.getMonth() + 1).toString().padStart(2, '0') + 
+               n.getDate().toString().padStart(2, '0') + n.getHours().toString().padStart(2, '0') + 
+               n.getMinutes().toString().padStart(2, '0') + n.getSeconds().toString().padStart(2, '0');
+    }
+
+    function downloadData(targetExt) {
+        const sVal = sourceEl.value.trim();
+        const oVal = outputEl.value.trim();
+        if (!sVal && !oVal) return;
+
+        let final = "";
+        if (targetExt === 'm3u') {
+            final = oVal.startsWith('#EXTM3U') ? oVal : txtToM3U(sVal);
+        } else {
+            // 修正原始資料為 TXT 時無法下載的問題
+            final = oVal.startsWith('#EXTM3U') ? m3uToTxt(oVal) : (oVal || sVal);
+        }
+
+        const blob = new Blob([final], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `iptv_${getTimestamp()}.${targetExt}`;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        addLog(`已存檔: ${a.download}`, "#27ae60");
+    }
+
+    function convertLanguage(lang) {
+        if (!outputEl.value) return;
+        outputEl.value = (lang === 'tw') ? toTW(outputEl.value) : toCN(outputEl.value);
+        addLog(`繁簡轉換完成 (${lang === 'tw' ? '繁體' : '簡體'})`);
+    }
+
+    async function handleFiles(files) {
+        let combined = "";
+        for (let f of files) {
+            const buf = await f.arrayBuffer();
+            combined += (combined ? "\n" : "") + smartDecode(buf);
+        }
+        sourceEl.value = combined;
+        sourceEl.dispatchEvent(new Event('input'));
+        addLog(`成功載入 ${files.length} 個檔案`);
+    }
+
+    function copyText(id) { document.getElementById(id).select(); document.execCommand('copy'); addLog("已複製"); }
+    function clearAll() { sourceEl.value = ""; outputEl.value = ""; logEl.innerHTML = "系統就緒。"; }
+    async function pasteToSource() { sourceEl.value = await navigator.clipboard.readText(); sourceEl.dispatchEvent(new Event('input')); }
+</script>
+</body>
+</html>
