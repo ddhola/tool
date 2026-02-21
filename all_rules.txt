@@ -43,6 +43,7 @@ TaiwanPlus
 TLC
 TVBS
 Z頻道
+超視
 人間衛視
 八大
 三立
@@ -380,3 +381,4 @@ ELTA
 三立
 靖天
 龍華
+
