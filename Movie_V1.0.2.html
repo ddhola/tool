@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>我的私人影視櫃 - 直播影視維護版</title>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chinese-s2t@1.0.0/dist/chinese-s2t.min.js"></script>
+    <style>
+        body { background: #141414; color: white; font-family: "Microsoft JhengHei", sans-serif; margin: 0; padding-top: 210px; }
+        #video-container { position: fixed; bottom: 20px; right: 20px; width: 320px; z-index: 9999; background: #000; border: 1px solid #e50914; border-radius: 8px; overflow: hidden; display: none; box-shadow: 0 10px 30px rgba(0,0,0,0.8); transition: all 0.3s ease; }
+        #video-container.expanded { width: 85%; max-width: 1000px; bottom: 50%; right: 50%; transform: translate(50%, 50%); }
+        video { width: 100%; aspect-ratio: 16/9; display: block; background: #000; }
+        .player-controls { background: #e50914; padding: 8px 15px; display: flex; justify-content: space-between; font-size: 14px; font-weight: bold; }
+        #episode-container { background: #1f1f1f; padding: 15px; display: none; border-top: 1px solid #333; max-height: 250px; overflow-y: auto; }
+        .ep-btn { background: #333; color: white; border: none; padding: 6px 12px; margin: 4px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+        .ep-btn.active { background: #e50914; font-weight: bold; }
+        .header-nav { position: fixed; top: 0; width: 100%; z-index: 100; background: #1f1f1f; box-shadow: 0 2px 15px rgba(0,0,0,0.9); }
+        .source-bar { padding: 8px 20px; background: #000; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid #e50914; font-size: 13px; }
+        .source-select { background: #e50914; color: white; border: none; padding: 4px 10px; border-radius: 4px; font-weight: bold; cursor: pointer; }
+        .search-bar { padding: 12px 20px; display: flex; gap: 10px; background: #2b2b2b; border-bottom: 1px solid #3d3d3d; }
+        input, select { background: #141414; color: white; border: 1px solid #444; padding: 8px 12px; border-radius: 4px; }
+        .search-btn { background: #e50914; color: white; border: none; padding: 8px 25px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .filter-bar { padding: 10px 20px; display: flex; flex-wrap: wrap; gap: 6px; max-height: 80px; overflow-y: auto; background: #1f1f1f; }
+        .filter-btn { background: #333; color: #ccc; border: none; padding: 4px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+        .filter-btn.active { background: #e50914; color: white; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: 18px; padding: 20px; }
+        .card { cursor: pointer; background: #222; border-radius: 8px; overflow: hidden; transition: 0.3s; position: relative; border: 1px solid #333; }
+        .card:hover { transform: translateY(-5px); border-color: #e50914; }
+        .card .live-icon { position: absolute; top: 8px; left: 8px; background: #e50914; color: white; padding: 2px 5px; font-size: 10px; border-radius: 3px; font-weight: bold; }
+        .card img { width: 100%; height: 215px; object-fit: cover; }
+        .year-tag { position: absolute; top: 8px; right: 8px; background: rgba(0, 0, 0, 0.7); color: #00ff00; padding: 2px 6px; font-size: 11px; border-radius: 3px; font-weight: bold; }
+        .info { padding: 10px; }
+        .info p { font-size: 13px; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: bold; }
+        #loading-status { text-align: center; padding: 30px; color: #888; font-size: 14px; }
+    </style>
+</head>
+<body>
+
+    <div id="video-container">
+        <div class="player-controls">
+            <span id="playing-title" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:150px;">準備播放</span>
+            <div><span style="cursor:pointer" onclick="document.getElementById('video-container').classList.toggle('expanded')">◱ 縮放</span> | 
+                 <span style="cursor:pointer" onclick="closePlayer()">✕ 關閉</span></div>
+        </div>
+        <video id="video" controls autoplay></video>
+        <div id="episode-container"></div>
+    </div>
+
+    <div class="header-nav">
+        <div class="source-bar">
+            <span>當前資源站：</span>
+            <select id="api-source-select" class="source-select" onchange="switchSource(this.value)">
+                <option value="LIVE_SOURCE">📺 電視直播頻道 (TXT)</option>
+            </select>
+            <span id="api-status" style="font-size: 11px; color: #888;"></span>
+        </div>
+
+        <div class="search-bar">
+            <input type="text" id="search-input" style="flex-grow:1" placeholder="輸入關鍵字..." onkeypress="if(event.keyCode==13) execSearch()">
+            <select id="year-select" onchange="execSearch()">
+                <option value="" selected>所有年份</option>
+            </select>
+            <button class="search-btn" onclick="execSearch()">立即搜尋</button>
+        </div>
+        <div class="filter-bar" id="filter-bar"></div>
+    </div>
+
+    <div id="movie-grid" class="grid"></div>
+    <div id="loading-status"></div>
+
+    <script>
+        // --- 直播源維護區 (TXT 格式) ---
+        const LIVE_DATA = `
+新聞臺,#genre#
+江蘇經典流行音樂廣播,http://lzlive.vojs.cn/2wtSfrS/92/live.m3u8
+亞太之聲 (純音樂),https://stream.rcs.revma.com/kydend74hv8uv
+TVBS新聞HD,http/61.219.99.20:8081/hls/75/817/ch59.m3u8
+東森財經,http://61.221.81.93:8590/http/192.168.1.10:8088/hls/63/805/ch11.m3u8
+東森新聞,http://61.221.81.93:8579/http/192.168.1.10:8088/hls/63/805/ch10.m3u8
+年代新聞臺,http://61.221.81.93:8578/http/192.168.1.10:8088/hls/67/809/ch27.m3u8
+三立新聞,http://61.221.81.93:8584/http/192.168.1.10:8088/hls/65/807/ch18.m3u8
+中天新聞_SDI,http://61.221.81.93:8582/http/192.168.1.10:8088/hls/78/80/ch63max.m3u8
+寰宇新聞,http://61.221.81.93:8585/http/192.168.1.10:8088/hls/76/818/ch62.m3u8
+非凡商業,http://61.221.81.93:8589/http/192.168.1.10:8088/hls/74/816/ch56.m3u8
+非凡新聞,http://61.221.81.93:8586/http/192.168.1.10:8088/hls/75/817/ch57.m3u8
+壹電視新聞,http://61.221.81.93:8580/http/192.168.1.10:8088/hls/66/808/ch24.m3u8
+TVBS新闻台,https://www.youtube.com/watch?v=m_dhMSvUCIc
+东森新闻台,https://www.youtube.com/watch?v=V1p33hqPrUk
+东森财经新闻台,https://www.youtube.com/watch?v=AEBeWMM1atA
+东森财经新闻台,https://www.youtube.com/watch?v=1I2iq41Akmo
+华视新闻台,https://www.youtube.com/watch?v=wM0g8EoUZ_E
+中视新闻台,https://www.youtube.com/watch?v=TCnaIE_SAtM
+台视新闻台,https://www.youtube.com/watch?v=xL0ch83RAK8
+民视新闻台,https://www.youtube.com/watch?v=ylYJSBUgaMA
+公視新聞,https://www.youtube.com/watch?v=quwqlazU-c8
+三立 iNEWS,https://www.youtube.com/watch?v=pF507BLtbqU
+三立新闻台,https://www.youtube.com/watch?v=MV9mI0GChwo
+中天新闻台,https://www.youtube.com/watch?v=vr3XyVCR4T0
+中天CTI+,https://www.youtube.com/watch?v=DM_PEM8GrIg
+寰宇新闻台,https://www.youtube.com/watch?v=6IquAgfvYmc
+寰宇新闻台湾台,https://www.youtube.com/watch?v=w87VGpgd90U
+鏡新聞,https://www.youtube.com/watch?v=5n0y6b0Q25o
+公视,https://www.youtube.com/watch?v=C6gYqSHLRw4
+
+
+體育,#genre#
+momo綜合臺,http://220.134.196.147:8575/http/59.120.8.187:8081/hls/76/818/momo_max.m3u8
+momo綜合臺,http://211.23.114.106:8511/http/59.120.8.187:8081/hls/76/818/momo_max.m3u8
+MoMo綜合臺,http://61.221.81.93:8565/http/192.168.1.10:8088/hls/76/818/momo_max.m3u8
+緯來體育HD,http://211.23.114.106:8528/http/59.120.8.187:8081/hls/67/809/ch28.m3u8
+緯來體育HD,http://220.134.196.147:8553/http/59.120.8.187:8081/hls/67/809/ch28.m3u8
+DAZN 1,http://211.23.114.106:8523/http/59.120.8.187:8078/hls/25/80/esport.m3u8
+DAZN 2,http://211.23.114.106:8555/http/59.120.8.187:8078/hls/26/80/esport2.m3u8
+DAZN 2,http://220.134.196.147:9119/http/59.120.8.187:8078/hls/26/80/esport2.m3u8
+四臺,#genre#
+華視HD,http://61.216.26.165:8503/http/192.168.1.9:8081/hls/89/80/Cts4max.m3u8
+華視HD,http://123.51.231.132:8503/http/192.168.1.9:8081/hls/89/80/Cts4max.m3u8
+中視HD,http://61.216.26.165:8502/http/192.168.1.9:8081/hls/88/80/Ctv4max.m3u8
+中視HD,http://123.51.231.132:8502/http/192.168.1.9:8081/hls/88/80/Ctv4max.m3u8
+民視HD,http://61.216.26.165:8504/http/192.168.1.9:8081/hls/85/80/Ftv4max.m3u8
+民視HD,http://123.51.231.132:8504/http/192.168.1.9:8081/hls/85/80/Ftv4max.m3u8
+綜合臺1,#genre#
+國興衛視,http://61.221.81.93:8588/http/192.168.1.10:8088/hls/64/806/ch15.m3u8
+緯來日本HD,http://211.23.114.106:9336/http/61.219.99.20:8081/hls/69/811/ch34.m3u8
+緯來育樂HD,http://211.23.114.106:8513/http/59.120.8.187:8081/hls/68/810/ch30.m3u8
+緯來育樂HD,http://220.134.196.147:8547/http/59.120.8.187:8081/hls/68/810/ch30.m3u8
+緯來綜合,http://61.221.81.93:8557/http/192.168.1.10:8088/hls/68/810/ch32.m3u8
+緯來綜合HD,http://211.23.114.106:8536/http/61.219.99.20:8081/hls/68/810/ch32.m3u8
+東森超視,http://61.221.81.93:8566/http/192.168.1.10:8088/hls/64/806/ch14.m3u8
+超視HD,http://211.23.114.106:9381/http/61.219.99.20:8081/hls/64/806/ch14.m3u8
+TVBS歡樂,http://61.221.81.93:8576/http/192.168.1.9:8088/hls/65/807/ch17.m3u8
+MUCH TV,http://61.221.81.93:8570/http/192.168.1.10:8088/hls/72/814/ch45.m3u8
+MUCH TV,http://211.23.114.106:9328/http/61.219.99.20:8081/hls/72/814/ch45.m3u8
+中天綜合,http://61.221.81.93:8567/http/192.168.1.10:8088/hls/67/809/ch25.m3u8
+八大綜合,http://61.221.81.93:8559/http/192.168.1.10:8088/hls/66/808/ch21.m3u8
+八大綜合HD,http://220.134.196.147:8518/http/61.219.99.20:8081/hls/66/808/ch21.m3u8
+
+18,#genre#
+松視1,http://15.204.105.50:25461/live/G2s9zK2n9m/xDtwVfWM8T/88.ts
+松視2,http://15.204.105.50:25461/live/G2s9zK2n9m/xDtwVfWM8T/89.ts
+松視3,http://15.204.105.50:25461/live/G2s9zK2n9m/xDtwVfWM8T/90.ts
+香蕉臺,http://15.204.105.50:25461/live/G2s9zK2n9m/xDtwVfWM8T/87.ts
+潘朵啦玩美,http://15.204.105.50:25461/live/G2s9zK2n9m/xDtwVfWM8T/86.ts
+驚豔臺,http://15.204.105.50:25461/live/G2s9zK2n9m/xDtwVfWM8T/85.ts
+Japan HDV,http://a0bn5xro.rostelekom.xyz/iptv/7XBZV8CQEYWT3U/6225/index.m3u8
+
+        `;
+
+        const API_LIST = [
+		{ name: "闪电资源(切)", api: "http://sdzyapi.com/api.php/provide/vod/" },		
+		{ name: "🥣爱坤┃影视", api: "https://ikunzyapi.com/api.php/provide/vod/from/ikm3u8/at/json" },
+		{ name: "🦄如意┃追剧", api: "https://cj.rycjapi.com/api.php/provide/vod" },
+
+		{ name: "🎊索尼1┃资源", api: "https://suoniapi.com/api.php/provide/vod/from/snm3u8/" },
+		{ name: "📀索尼2┃影视", api: "https://suoniapi.com/api.php/provide/vod" },
+		{ name: "🆕 非凡┃资源", api: "http://cj.ffzyapi.com/api.php/provide/vod/" },
+
+
+		{ name: "🎀极速┃采集", api: "https://jszyapi.com/api.php/provide/vod/" },
+		{ name: "🐂红牛┃采集", api: "https://www.hongniuzy2.com/api.php/provide/vod/" },
+		{ name: "🔰金鹰┃影视", api: "https://jyzyapi.com/provide/vod/" },
+		{ name: "🌀暴風┃影视", api: "https://bfzyapi.com/api.php/provide/vod/?wd=" },
+
+		{ name: "📅天天┃影视", api: "https://api.1080zyku.com/inc/apijson.php" },
+		{ name: "🚀极速┃带草", api: "https://jszyapi.com/api.php/provide/vod/from/jsm3u8/" },
+		
+		{ name: "卧龙资源(切)", api: "https://collect.wolongzyw.com/api.php/provide/vod/" },
+		{ name: "光速资源(切)", api: "https://api.guangsuapi.com/api.php/provide/vod/" },
+		{ name: "新浪资源(切)", api: "http://api.xinlangapi.com/xinlangapi.php/provide/vod/" },
+		{ name: "百度资源(切)", api: "https://api.apibdzy.com/api.php/provide/vod/" },
+		
+		{ name: "🔞樂播資源", api: "https://lbapi9.com/api.php/provide/vod/" },
+		{ name: "🔞番号资源", api: "http://fhapi9.com/api.php/provide/vod/" },
+		{ name: "🔞黄色仓库(旧)", api: "https://hsckzy.vip/api.php/provide/vod/" },
+		{ name: "🔞桃花资源", api: "https://thzy1.me/api.php/provide/vod/" },
+		{ name: "🔞国产资源", api: "https://fqzy.me/api.php/provide/vod/?ac=list" },
+		{ name: "🔞lsb资源", api: "https://apilsbzy1.com/api.php/provide/vod/" },
+		{ name: "🔞性细胞", api: "https://www.xxibaozyw.com/api.php/provide/vod/" },
+		{ name: "🔞麻豆视频2", api: "https://madouse.la/api.php/provide/vod/" },
+		{ name: "🔞鲨鱼资源", api: "https://shayuapi.com/api.php/provide/vod/" }
+        ];
+
+        let currentSource = "LIVE_SOURCE"; 
+        let state = { pg: 1, tid: '', wd: '', year: '', isLoading: false, totalPage: 1 };
+        const video = document.getElementById('video');
+        const hls = new Hls();
+
+        function initSourceSelector() {
+            const selector = document.getElementById('api-source-select');
+            API_LIST.forEach(item => {
+                const opt = document.createElement('option');
+                opt.value = item.api;
+                opt.innerText = item.name;
+                selector.appendChild(opt);
+            });
+            
+            const yearSelect = document.getElementById('year-select');
+            for(let y = 2026; y >= 2005; y--) {
+                const opt = document.createElement('option');
+                opt.value = y; opt.innerText = y + " 年";
+                yearSelect.appendChild(opt);
+            }
+            switchSource("LIVE_SOURCE");
+        }
+
+        async function switchSource(newApi) {
+            currentSource = newApi;
+            document.getElementById('filter-bar').innerHTML = '<button class="filter-btn active" onclick="loadData({tid:\'\'}, this)">全部資源</button>';
+            document.getElementById('movie-grid').innerHTML = '';
+            
+            if (newApi === "LIVE_SOURCE") {
+                loadLiveData();
+                document.getElementById('api-status').innerText = "直播模式已就緒";
+                return;
+            }
+
+            try {
+                const res = await fetch(`${currentSource}?ac=list`);
+                const data = await res.json();
+                const bar = document.getElementById('filter-bar');
+                if(data.class) {
+                    data.class.forEach(cls => {
+                        const btn = document.createElement('button');
+                        btn.className = 'filter-btn';
+                        btn.innerText = cls.type_name;
+                        btn.onclick = (e) => loadData({tid: cls.type_id}, e.target);
+                        bar.appendChild(btn);
+                    });
+                }
+                loadData({tid: ''});
+                document.getElementById('api-status').innerText = "連線成功";
+            } catch (err) {
+                document.getElementById('api-status').innerText = "連線失敗";
+            }
+        }
+
+        // --- 直播解析邏輯 ---
+        function loadLiveData() {
+            const grid = document.getElementById('movie-grid');
+            const lines = LIVE_DATA.trim().split('\n');
+            let currentGenre = "直播";
+            
+            const liveItems = [];
+            lines.forEach(line => {
+                if (line.includes("#genre#")) {
+                    currentGenre = line.split(',')[0];
+                } else if (line.includes(',')) {
+                    const [name, url] = line.split(',');
+                    liveItems.push({ name, url, genre: currentGenre });
+                }
+            });
+
+            grid.innerHTML = liveItems.map(item => `
+                <div class="card" onclick="playLive('${item.url}', '${item.name}')">
+                    <div class="live-icon">LIVE</div>
+                    <div class="year-tag">${item.genre}</div>
+                    <img src="https://via.placeholder.com/155x215/e50914/ffffff?text=${encodeURIComponent(item.name)}" onerror="this.src='https://via.placeholder.com/155x215?text=LIVE'">
+                    <div class="info"><p>${item.name}</p><span>直播訊號源</span></div>
+                </div>
+            `).join('');
+            document.getElementById('loading-status').innerText = "";
+        }
+
+        function playLive(url, name) {
+            document.getElementById('video-container').style.display = 'block';
+            document.getElementById('playing-title').innerText = name;
+            document.getElementById('episode-container').style.display = 'none';
+            if (Hls.isSupported()) { hls.loadSource(url); hls.attachMedia(video); video.play(); }
+            else { video.src = url; video.play(); }
+        }
+
+        // --- 原有影視邏輯 ---
+        function closePlayer() { video.pause(); document.getElementById('video-container').style.display = 'none'; }
+
+        function execSearch() {
+            if (currentSource === "LIVE_SOURCE") return; // 直播模式暫不支援關鍵字搜尋
+            const inputVal = document.getElementById('search-input').value.trim();
+            const year = document.getElementById('year-select').value;
+            const simplifiedWd = window.ChineseS2T ? ChineseS2T.t2s(inputVal) : inputVal;
+            loadData({ wd: simplifiedWd, year: year });
+        }
+
+        async function loadData(params, btn, isNextPage = false) {
+            if (currentSource === "LIVE_SOURCE") return;
+            if (state.isLoading) return;
+            state.isLoading = true;
+            if (!isNextPage) {
+                state.pg = 1;
+                state.tid = params.tid !== undefined ? params.tid : state.tid;
+                state.wd = params.wd !== undefined ? params.wd : '';
+                state.year = params.year !== undefined ? params.year : '';
+                if (btn) {
+                    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                }
+                document.getElementById('movie-grid').innerHTML = '';
+            }
+            let query = `?ac=detail&t=${state.tid}&pg=${state.pg}&wd=${encodeURIComponent(state.wd)}&year=${state.year}`;
+            try {
+                const res = await fetch(currentSource + query);
+                const data = await res.json();
+                state.totalPage = data.pagecount || 1;
+                renderGrid(data.list);
+                state.pg++;
+                document.getElementById('loading-status').innerText = state.pg > state.totalPage ? "到底了" : "向下捲動載入";
+            } catch (err) { document.getElementById('loading-status').innerText = "載入出錯"; }
+            state.isLoading = false;
+        }
+
+        function renderGrid(list) {
+            const grid = document.getElementById('movie-grid');
+            if (!list || list.length === 0) return;
+            grid.insertAdjacentHTML('beforeend', list.map(item => {
+                const safeData = btoa(unescape(encodeURIComponent(JSON.stringify(item))));
+                return `
+                <div class="card" onclick="showEpisodes('${safeData}')">
+                    <div class="year-tag">${item.vod_year || ''}</div>
+                    <img src="${item.vod_pic}" onerror="this.src='https://via.placeholder.com/155x215?text=無海報'">
+                    <div class="info"><p>${item.vod_name}</p><span>${item.vod_remarks}</span></div>
+                </div>`;
+            }).join(''));
+        }
+
+        function showEpisodes(base64Data) {
+            const item = JSON.parse(decodeURIComponent(escape(atob(base64Data))));
+            const epContainer = document.getElementById('episode-container');
+            document.getElementById('video-container').style.display = 'block';
+            document.getElementById('playing-title').innerText = item.vod_name;
+            const episodes = item.vod_play_url.split('$$$')[0].split('#');
+            epContainer.innerHTML = '<div style="font-size:12px;margin-bottom:8px;color:#e50914">選集：</div>';
+            episodes.forEach(ep => {
+                const [name, url] = ep.split('$');
+                if(!url) return;
+                const btn = document.createElement('button');
+                btn.className = 'ep-btn';
+                btn.innerText = name;
+                btn.onclick = () => {
+                    document.querySelectorAll('.ep-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    if (Hls.isSupported()) { hls.loadSource(url); hls.attachMedia(video); video.play(); }
+                    else { video.src = url; video.play(); }
+                };
+                epContainer.appendChild(btn);
+            });
+            epContainer.style.display = 'block';
+            epContainer.querySelectorAll('.ep-btn')[0].click();
+        }
+
+        window.onscroll = () => {
+            if (currentSource === "LIVE_SOURCE") return;
+            if ((window.innerHeight + window.scrollY) >= document.body.offsetHeight - 800) {
+                if (!state.isLoading && state.pg <= state.totalPage) loadData({}, null, true);
+            }
+        };
+        initSourceSelector();
+    </script>
+</body>
+</html>
