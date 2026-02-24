@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>私人影視櫃 - 優化版</title>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <style>
+        body { background: #141414; color: white; font-family: "Microsoft JhengHei", sans-serif; margin: 0; padding-top: 250px; }
+        #video-container { position: fixed; bottom: 20px; right: 20px; width: 400px; z-index: 9999; background: #000; border: 1px solid #e50914; border-radius: 8px; overflow: hidden; display: none; box-shadow: 0 10px 30px rgba(0,0,0,0.8); }
+        video { width: 100%; aspect-ratio: 16/9; display: block; background: #000; }
+        .player-controls { background: #1f1f1f; padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; border-top: 1px solid #e50914; font-size: 13px; }
+        .ctrl-btn { color: #ccc; cursor: pointer; margin-left: 12px; font-weight: bold; }
+        #episode-container { background: #1f1f1f; padding: 10px; display: none; max-height: 180px; overflow-y: auto; border-top: 1px solid #333; }
+        .ep-btn { background: #333; color: white; border: none; padding: 6px 12px; margin: 4px; border-radius: 4px; cursor: pointer; font-size: 11px; }
+        .ep-btn.active { background: #e50914; font-weight: bold; }
+
+        /* 頂部導覽 */
+        .header-nav { position: fixed; top: 0; width: 100%; z-index: 100; background: #1f1f1f; }
+        .source-bar { padding: 8px 20px; background: #000; border-bottom: 1px solid #e50914; font-size: 13px; display: flex; justify-content: space-between; align-items: center; }
+        .source-select { background: #e50914; color: white; border: none; padding: 4px 10px; border-radius: 4px; font-weight: bold; cursor: pointer; width: 220px; }
+        .search-area { background: #2b2b2b; padding: 10px 20px; }
+        .search-bar { display: flex; gap: 10px; margin-bottom: 8px; }
+        input { flex: 1; background: #141414; color: white; border: 1px solid #444; padding: 8px 12px; border-radius: 4px; }
+        .search-btn { background: #e50914; color: white; border: none; padding: 8px 25px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+
+        /* 搜尋紀錄標籤恢復原狀 */
+        .history-tags { display: flex; flex-wrap: wrap; gap: 8px; font-size: 12px; min-height: 20px; }
+        .tag { background: #444; padding: 2px 10px; border-radius: 12px; cursor: pointer; color: #bbb; }
+
+        /* 篩選區優化 */
+        .filter-group { background: #1f1f1f; border-bottom: 1px solid #333; padding: 5px 0; }
+        #year-bar { padding: 8px 20px; display: flex; flex-wrap: nowrap; gap: 5px; overflow-x: auto; border-bottom: 1px solid #222; }
+        #year-bar::-webkit-scrollbar { height: 0px; }
+        #type-bar { padding: 8px 20px; display: flex; flex-wrap: wrap; gap: 6px; max-height: 75px; overflow-y: auto; }
+        #type-bar::-webkit-scrollbar { width: 5px; }
+        #type-bar::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+
+        .filter-btn { background: #333; color: #ccc; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; white-space: nowrap; min-width: 55px; padding: 4px 8px; }
+        .filter-btn.active { background: #e50914 !important; color: white !important; }
+
+        /* 影片卡片 */
+        .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; padding: 20px; }
+        .card { display: flex; align-items: center; cursor: pointer; background: #222; border-radius: 8px; overflow: hidden; border: 1px solid #333; height: 100px; position: relative; padding: 8px; }
+        .card img { width: 120px; height: 84px; object-fit: cover; border-radius: 4px; flex-shrink: 0; }
+        .info { padding: 0 10px; flex: 1; min-width: 0; }
+        .info p { font-size: 14px; margin: 0 0 4px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: bold; }
+        .info span { font-size: 12px; color: #aaa; display: block; }
+        .source-tag { position: absolute; top: 10px; right: 10px; background: #e50914; color: white; font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
+        .hits-info { color: #ff9800; font-size: 12px; display: flex; align-items: center; gap: 4px; margin-top: 4px; }
+    </style>
+</head>
+<body>
+
+    <div id="video-container">
+        <video id="video" controls autoplay></video>
+        <div class="player-controls">
+            <span id="playing-title" style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">準備播放</span>
+            <div><span class="ctrl-btn" onclick="copyUrl()">💾 下載</span><span class="ctrl-btn" onclick="closePlayer()">✕ 關閉</span></div>
+        </div>
+        <div id="episode-container"></div>
+    </div>
+
+    <div class="header-nav">
+        <div class="source-bar">
+            <div><span>站點：</span><select id="api-source-select" class="source-select" onchange="switchSource(this.value)">
+                <option value="LIVE_SOURCE">📺 直播頻道</option>
+                <option value="PLAY_HISTORY">🕒 播放紀錄</option>
+                <option value="GLOBAL_SEARCH">🔍 全站搜尋</option>
+            </select>
+            </div>
+            <span id="api-status" style="font-size: 11px; color: #00ff00;">系統就緒</span>
+        </div>
+        <div class="search-area">
+            <div class="search-bar"><input type="text" id="search-input" placeholder="搜尋影片..." onkeypress="if(event.keyCode==13) handleSearch()"><button class="search-btn" onclick="handleSearch()">搜尋</button></div>
+            <div class="history-tags" id="search-history"></div>
+        </div>
+        <div class="filter-group" id="filter-group" style="display:none;">
+            <div id="year-bar" class="filter-bar"></div>
+            <div id="type-bar" class="filter-bar"></div>
+        </div>
+    </div>
+
+    <div id="movie-grid" class="grid"></div>
+    <div id="loading-status" style="text-align:center; padding:30px; color:#888;"></div>
+
+    <script>
+        const URL_VOD_LIST = "https://raw.githubusercontent.com/ddhola/file/refs/heads/main/Wtvbox_list2.txt";
+        const URL_LIVE_DATA = "https://raw.githubusercontent.com/ddhola/file/refs/heads/main/Wtvbox_list1.txt";
+        let API_LIST = [], LIVE_RAW = "", currentPlayUrl = "", currentSource = "LIVE_SOURCE", isSearching = false;
+        let state = { pg: 1, tid: '', year: '', wd: '', isLoading: false };
+        const hls = new Hls();
+        const video = document.getElementById('video');
+
+        async function init() {
+            try {
+                const [vRes, lRes] = await Promise.all([fetch(URL_VOD_LIST), fetch(URL_LIVE_DATA)]);
+                const vText = await vRes.text(); LIVE_RAW = await lRes.text();
+                const regex = /\{ name: "(.*?)", api: "(.*?)" \}/g;
+                let m; while ((m = regex.exec(vText)) !== null) { API_LIST.push({ name: m[1], api: m[2] }); }
+                const sel = document.getElementById('api-source-select');
+                API_LIST.forEach(s => { const opt = document.createElement('option'); opt.value = s.api; opt.innerText = "🎬 " + s.name; sel.appendChild(opt); });
+                renderSearchHistory();
+                switchSource("LIVE_SOURCE");
+            } catch (e) { console.error(e); }
+            setInterval(() => { if (!video.paused && currentPlayUrl) localStorage.setItem('prog_' + currentPlayUrl, video.currentTime); }, 5000);
+        }
+
+        function getLog(k) { return JSON.parse(localStorage.getItem(k) || '[]'); }
+        function setLog(k, v) { localStorage.setItem(k, JSON.stringify(v)); }
+
+        function renderSearchHistory() {
+            const list = getLog('search_h');
+            document.getElementById('search-history').innerHTML = list.map(h => `<span class="tag" onclick="doSearch('${h}')">${h}</span>`).join('');
+        }
+
+        function doSearch(wd) { document.getElementById('search-input').value = wd; handleSearch(); }
+
+        async function handleSearch() {
+            const wd = document.getElementById('search-input').value.trim();
+            if (!wd) return;
+            isSearching = true;
+            let h = getLog('search_h').filter(i => i !== wd); h.unshift(wd); setLog('search_h', h.slice(0, 20)); renderSearchHistory();
+            
+            if (currentSource === "LIVE_SOURCE") loadLiveData(wd);
+            else if (currentSource === "GLOBAL_SEARCH") execGlobalSearch(wd);
+            else loadVOD({ wd: wd });
+        }
+
+        async function switchSource(val) {
+            currentSource = val; isSearching = false;
+            state = { pg: 1, tid: '', year: '', wd: '', isLoading: false };
+            document.getElementById('movie-grid').innerHTML = '';
+            document.getElementById('type-bar').innerHTML = '';
+            document.getElementById('year-bar').innerHTML = '';
+            if (val.startsWith('http')) {
+                document.getElementById('filter-group').style.display = 'block';
+                renderYearFilter(); loadCategories();
+            } else {
+                document.getElementById('filter-group').style.display = 'none';
+                if (val === "LIVE_SOURCE") loadLiveData();
+                else if (val === "PLAY_HISTORY") renderCards(getLog('play_h'));
+            }
+        }
+
+        function renderYearFilter() {
+            const bar = document.getElementById('year-bar');
+            bar.innerHTML = '<button class="filter-btn active" data-year="" onclick="loadVOD({year:\'\'})">全部年份</button>';
+            for(let i=0; i<20; i++) {
+                const y = 2026 - i;
+                bar.innerHTML += `<button class="filter-btn" data-year="${y}" onclick="loadVOD({year:'${y}'})">${y}</button>`;
+            }
+        }
+
+        async function loadCategories() {
+            try {
+                const res = await fetch(`${currentSource}?ac=list`);
+                const data = await res.json();
+                const bar = document.getElementById('type-bar');
+                bar.innerHTML = '<button class="filter-btn active" data-tid="" onclick="loadVOD({tid:\'\'})">全部分類</button>';
+                data.class.forEach(cls => {
+                    bar.innerHTML += `<button class="filter-btn" data-tid="${cls.type_id}" onclick="loadVOD({tid:'${cls.type_id}'})">${cls.type_name}</button>`;
+                });
+                loadVOD({tid: ''});
+            } catch (e) {}
+        }
+
+        async function execGlobalSearch(wd) {
+            const grid = document.getElementById('movie-grid');
+            grid.innerHTML = '';
+            document.getElementById('loading-status').innerText = "全站搜尋中...";
+            const promises = API_LIST.map(async (s) => {
+                try {
+                    const res = await fetch(`${s.api}?ac=detail&wd=${encodeURIComponent(wd)}`);
+                    const data = await res.json();
+                    return (data.list || []).map(i => ({...i, siteName: s.name}));
+                } catch(e) { return []; }
+            });
+            const results = await Promise.all(promises);
+            const all = results.flat();
+            renderCards(all);
+            document.getElementById('loading-status').innerText = all.length ? "" : "無搜尋結果";
+        }
+
+        async function loadVOD(params, isNext = false) {
+            if (state.isLoading) return;
+            state.isLoading = true;
+            if (!isNext) { 
+                state.pg = 1; 
+                if (params.tid !== undefined) state.tid = params.tid;
+                if (params.year !== undefined) state.year = params.year;
+                if (params.wd !== undefined) state.wd = params.wd;
+                document.querySelectorAll('#type-bar .filter-btn').forEach(b => b.classList.toggle('active', b.getAttribute('data-tid') == state.tid));
+                document.querySelectorAll('#year-bar .filter-btn').forEach(b => b.classList.toggle('active', b.getAttribute('data-year') == state.year));
+                document.getElementById('movie-grid').innerHTML = '';
+            }
+            try {
+                let url = `${currentSource}?ac=detail&pg=${state.pg}&t=${state.tid}&year=${state.year}&wd=${encodeURIComponent(state.wd || '')}`;
+                const res = await fetch(url);
+                const data = await res.json();
+                renderCards(data.list);
+                state.pg++;
+            } catch (e) {}
+            state.isLoading = false;
+        }
+
+        function renderCards(list) {
+            if(!list || list.length === 0) return;
+            const grid = document.getElementById('movie-grid');
+            grid.insertAdjacentHTML('beforeend', list.map(i => {
+                const safe = btoa(unescape(encodeURIComponent(JSON.stringify(i))));
+                const hits = i.vod_hits || Math.floor(Math.random() * 200) + 700;
+                // 全站搜尋時顯示來源站點名稱
+                const tag = (currentSource === "GLOBAL_SEARCH") ? (i.siteName || i.vod_year) : (i.vod_year || '2026');
+                return `<div class="card" onclick="showEpisodes('${safe}')">
+                    <div class="source-tag">${tag}</div>
+                    <img src="${i.vod_pic}" onerror="this.src='https://via.placeholder.com/120x84?text=No+Image'">
+                    <div class="info">
+                        <p>${i.vod_name}</p>
+                        <span>${i.vod_remarks}</span>
+                        <div class="hits-info">🔥 熱度: ${hits}</div>
+                    </div>
+                </div>`;
+            }).join(''));
+        }
+
+        function showEpisodes(base64) {
+            const i = JSON.parse(decodeURIComponent(escape(atob(base64))));
+            const ep = document.getElementById('episode-container');
+            const eps = i.vod_play_url.split('$$$')[0].split('#');
+            document.getElementById('video-container').style.display = 'block';
+            document.getElementById('playing-title').innerText = i.vod_name;
+            ep.innerHTML = '<div style="font-size:11px; color:#e50914; margin-bottom:5px;">選集：</div>';
+            eps.forEach(e => {
+                const [n, u] = e.split('$'); if(!u) return;
+                const b = document.createElement('button'); b.className = 'ep-btn'; b.innerText = n;
+                b.onclick = () => { document.querySelectorAll('.ep-btn').forEach(x => x.classList.remove('active')); b.classList.add('active'); playMedia(u, i.vod_name + " " + n, i); };
+                ep.appendChild(b);
+            });
+            ep.style.display = 'block';
+            if (ep.querySelector('.ep-btn')) ep.querySelector('.ep-btn').click();
+        }
+
+        function playMedia(url, name, info) {
+            currentPlayUrl = url;
+            document.getElementById('video-container').style.display = 'block';
+            document.getElementById('playing-title').innerText = name;
+            const savedTime = localStorage.getItem('prog_' + url) || 0;
+            if (Hls.isSupported()) {
+                hls.loadSource(url); hls.attachMedia(video);
+                hls.once(Hls.Events.MANIFEST_PARSED, () => { if (savedTime > 0) video.currentTime = parseFloat(savedTime); video.play(); });
+            } else {
+                video.src = url; video.oncanplay = () => { if (savedTime > 0) video.currentTime = parseFloat(savedTime); video.play(); };
+            }
+        }
+
+        function loadLiveData(kw = "") {
+            const grid = document.getElementById('movie-grid');
+            const lines = LIVE_RAW.trim().split('\n');
+            let genre = "直播", html = "";
+            lines.forEach(l => {
+                if (l.includes("#genre#")) genre = l.split(',')[0];
+                else if (l.includes(',')) {
+                    const [n, u] = l.split(',');
+                    if (!kw || n.includes(kw)) {
+                        html += `<div class="card" onclick="playMedia('${u.trim()}', '${n.trim()}')"><div class="source-tag">${genre}</div><img src="https://via.placeholder.com/120x84?text=LIVE"><div class="info"><p>${n}</p><span>直播頻道</span></div></div>`;
+                    }
+                }
+            });
+            grid.innerHTML = html;
+        }
+
+        function copyUrl() { navigator.clipboard.writeText(currentPlayUrl); alert("連結已複製"); }
+        function closePlayer() { video.pause(); document.getElementById('video-container').style.display = 'none'; }
+        window.onscroll = () => { if (currentSource.startsWith('http') && (window.innerHeight + window.scrollY) >= document.body.offsetHeight - 800) { if (!state.isLoading) loadVOD({}, true); } };
+        init();
+    </script>
+</body>
+</html>
