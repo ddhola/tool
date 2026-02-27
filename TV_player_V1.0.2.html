@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>同步排序播放器 - Netflix 影院風</title>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+
+<style>
+:root{
+    --bg:#0b0b0b;
+    --panel:#141414;
+    --netflix:#e50914;
+    --text:#e5e5e5;
+}
+
+body{
+    margin:0;
+    background:var(--bg);
+    font-family:"Microsoft JhengHei",sans-serif;
+    color:var(--text);
+    display:flex;
+    flex-direction:column;
+    height:100vh;
+    overflow:hidden;
+}
+
+/* 頂部 */
+header{
+    background:#000;
+    padding:14px;
+    text-align:center;
+    font-size:1rem;
+    border-bottom:2px solid var(--netflix);
+    font-weight:bold;
+    letter-spacing:1px;
+}
+
+/* 主區域 */
+.main{
+    display:flex;
+    flex:1;
+    overflow:hidden;
+}
+
+/* 播放區 */
+.player-view{
+    flex:3;
+    background:#000;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    position:relative;
+}
+
+video{
+    width:100%;
+    height:auto;
+    max-height:100%;
+}
+
+/* 頻道列表 */
+.channel-list{
+    width:250px;
+    background:var(--panel);
+    overflow-y:auto;
+    border-left:1px solid #000;
+    border-right:1px solid #000;
+}
+
+.ch-item{
+    padding:10px 14px;
+    font-size:13px;
+    border-bottom:1px solid #1f1f1f;
+    cursor:pointer;
+    color:#bbb;
+    transition:all .25s ease;
+}
+
+.ch-item:hover{
+    background:rgba(229,9,20,0.12);
+    color:#fff;
+}
+
+.ch-item.active{
+    background:rgba(229,9,20,0.18);
+    color:#fff;
+    font-weight:bold;
+    border-left:3px solid var(--netflix);
+}
+
+/* 分類欄 Netflix 風 */
+.category-bar{
+    width:100px;
+    background:#000;
+    display:flex;
+    flex-direction:column;
+    border-left:1px solid #1c1c1c;
+    box-shadow:inset 0 0 30px rgba(0,0,0,.8);
+    overflow-y:auto;
+}
+
+.cat-item{
+    padding:18px 6px;
+    text-align:center;
+    font-size:13px;
+    letter-spacing:1px;
+    cursor:pointer;
+    color:#aaa;
+    transition:all .25s ease;
+    border-right:3px solid transparent;
+}
+
+.cat-item:hover{
+    background:rgba(229,9,20,0.1);
+    color:#fff;
+}
+
+.cat-item.active{
+    color:#fff;
+    background:rgba(229,9,20,0.15);
+    border-right:3px solid var(--netflix);
+    text-shadow:0 0 8px rgba(229,9,20,0.8);
+}
+
+/* 廣播視覺 */
+.audio-bg{
+    position:absolute;
+    width:280px;
+    height:280px;
+    background:var(--netflix);
+    border-radius:50%;
+    filter:blur(80px);
+    opacity:.15;
+    animation:pulse 2.5s infinite;
+    display:none;
+}
+
+@keyframes pulse{
+    0%{transform:scale(1);opacity:.1;}
+    50%{transform:scale(1.3);opacity:.2;}
+    100%{transform:scale(1);opacity:.1;}
+}
+
+/* 手機 */
+@media(max-width:800px){
+    .main{flex-direction:column;}
+    .player-view{height:240px;}
+    .channel-list{width:100%;}
+    .category-bar{
+        width:100%;
+        flex-direction:row;
+        height:50px;
+        overflow-x:auto;
+        border-left:none;
+        border-top:1px solid #1c1c1c;
+    }
+    .cat-item{
+        flex-shrink:0;
+        line-height:50px;
+        padding:0 18px;
+        border-right:none;
+        border-bottom:3px solid transparent;
+    }
+    .cat-item.active{
+        border-bottom:3px solid var(--netflix);
+    }
+}
+</style>
+</head>
+
+<body>
+
+<header id="cur-ch">讀取清單中...</header>
+
+<div class="main">
+
+    <div class="player-view">
+        <div id="audio-visual" class="audio-bg"></div>
+        <video id="video" controls autoplay playsinline></video>
+    </div>
+
+    <div class="channel-list" id="channel-list">
+        <div style="padding:20px;color:#555;text-align:center;">
+            正在載入遠端數據...
+        </div>
+    </div>
+
+    <div class="category-bar" id="category-bar"></div>
+
+</div>
+
+<script>
+const listUrl='https://raw.githubusercontent.com/ddhola/file/refs/heads/main/Wtvbox_list1.txt';
+const video=document.getElementById('video');
+const catBar=document.getElementById('category-bar');
+const chList=document.getElementById('channel-list');
+const header=document.getElementById('cur-ch');
+const visual=document.getElementById('audio-visual');
+
+let hls=new Hls();
+let masterData={};
+let categoryOrder=[];
+
+async function init(){
+    try{
+        const res=await fetch(listUrl);
+        const text=await res.text();
+        parseData(text);
+    }catch(e){
+        chList.innerHTML='<div style="padding:20px;color:red;">讀取失敗</div>';
+    }
+}
+
+function parseData(text){
+    const lines=text.split(/\r?\n/);
+    let currentCat="未分類";
+    masterData={};
+    categoryOrder=[];
+
+    lines.forEach(line=>{
+        const row=line.trim();
+        if(!row) return;
+        const parts=row.split(',');
+        if(parts.length<2) return;
+
+        const name=parts[0].trim();
+        const url=parts[1].trim();
+
+        if(url.toLowerCase()==="#genre#"){
+            currentCat=name;
+            if(!categoryOrder.includes(currentCat)){
+                categoryOrder.push(currentCat);
+                masterData[currentCat]=[];
+            }
+        }else{
+            if(!masterData[currentCat]){
+                categoryOrder.push(currentCat);
+                masterData[currentCat]=[];
+            }
+            masterData[currentCat].push({name,url});
+        }
+    });
+
+    renderCategories();
+}
+
+function renderCategories(){
+    catBar.innerHTML="";
+    categoryOrder.forEach((cat,i)=>{
+        const div=document.createElement('div');
+        div.className='cat-item';
+        div.innerText=cat;
+        div.onclick=()=>{
+            document.querySelectorAll('.cat-item').forEach(el=>el.classList.remove('active'));
+            div.classList.add('active');
+            renderChannels(cat);
+        };
+        catBar.appendChild(div);
+        if(i===0) div.click();
+    });
+}
+
+function renderChannels(cat){
+    chList.innerHTML="";
+    if(!masterData[cat]) return;
+
+    masterData[cat].forEach(ch=>{
+        const div=document.createElement('div');
+        div.className='ch-item';
+        div.innerText=ch.name;
+        div.onclick=()=>{
+            document.querySelectorAll('.ch-item').forEach(el=>el.classList.remove('active'));
+            div.classList.add('active');
+            playHandler(ch.url,ch.name);
+        };
+        chList.appendChild(div);
+    });
+}
+
+function playHandler(url,name){
+    header.innerText="正在播放: "+name;
+
+    hls.destroy();
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+    visual.style.display="none";
+
+    if(url.toLowerCase().includes('.m3u8')){
+        if(Hls.isSupported()){
+            hls=new Hls();
+            hls.loadSource(url);
+            hls.attachMedia(video);
+        }else{
+            video.src=url;
+        }
+    }else{
+        visual.style.display="block";
+        video.src=url;
+    }
+    video.play().catch(()=>{});
+}
+
+init();
+</script>
+
+</body>
+</html>
