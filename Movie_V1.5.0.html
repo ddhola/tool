@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>私人影視櫃 - 搜尋與高亮修正版</title>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <style>
+        :root { --netflix: #e50914; --bg: #141414; --panel: #1f1f1f; }
+        body { background: var(--bg); color: white; font-family: "Microsoft JhengHei", sans-serif; margin: 0; padding: 0; overflow-x: hidden; }
+        
+        .header-nav { position: sticky; top: 0; z-index: 1000; background: var(--panel); border-bottom: 2px solid var(--netflix); }
+        .source-bar { padding: 8px 20px; background: #000; display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+        .source-select { background: var(--netflix); color: white; border: none; padding: 4px 10px; border-radius: 4px; font-weight: bold; cursor: pointer; width: 220px; }
+        
+        .search-area { background: #2b2b2b; padding: 10px 20px; display: none; }
+        .search-area.visible { display: block; }
+        .search-bar { display: flex; gap: 10px; margin-bottom: 8px; }
+        input { flex: 1; background: #141414; color: white; border: 1px solid #444; padding: 8px 12px; border-radius: 4px; }
+        .search-btn { background: var(--netflix); color: white; border: none; padding: 8px 25px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .btn-series { background: #ff9800 !important; }
+        .btn-export { background: #2196F3 !important; }
+        
+        #movie-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; padding: 20px; }
+        .card { display: flex; align-items: center; background: #222; border-radius: 8px; overflow: hidden; border: 1px solid #333; height: 100px; position: relative; padding: 8px; }
+        .card img { width: 120px; height: 84px; object-fit: cover; border-radius: 4px; cursor: pointer; }
+        .info { padding: 0 10px; flex: 1; min-width: 0; }
+        .info p { font-size: 14px; margin: 0 0 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: bold; cursor: pointer; }
+        .source-tag { position: absolute; top: 10px; right: 10px; background: var(--netflix); color: white; font-size: 11px; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
+        .delete-btn { position: absolute; top: 8px; left: 8px; background: rgba(0,0,0,0.6); color: #ff4444; width: 24px; height: 24px; border-radius: 50%; text-align: center; line-height: 22px; cursor: pointer; z-index: 10; }
+
+        #live-layout { display: none; height: calc(100vh - 45px); width: 100vw; flex-direction: row-reverse; }
+        .live-cats { width: 120px; background: #000; overflow-y: auto; border-left: 1px solid #222; }
+        .live-list { width: 280px; background: #141414; overflow-y: auto; border-left: 1px solid #222; }
+        .live-player { flex: 1; background: #000; position: relative; display: flex; align-items: center; justify-content: center; }
+        #live-video { width: 100%; height: auto; max-height: 100%; aspect-ratio: 16/9; background: #000; }
+
+        .ch-item, .cat-item { padding: 12px; cursor: pointer; border-bottom: 1px solid #222; font-size: 14px; color: #ccc; }
+        .ch-item.active, .cat-item.active { background: rgba(229,9,20,0.3); color: white; border-left: 3px solid var(--netflix); }
+
+        #video-container { position: fixed; bottom: 20px; right: 20px; width: 420px; max-height: 85vh; z-index: 9999; background: #111; border: 1px solid var(--netflix); border-radius: 8px; overflow: hidden; display: none; box-shadow: 0 10px 40px rgba(0,0,0,0.9); flex-direction: column; }
+        #vod-video { width: 100%; aspect-ratio: 16/9; background: #000; display: block; }
+        .player-controls { background: #1f1f1f; padding: 10px 15px; display: flex; justify-content: space-between; font-size: 13px; align-items: center; }
+        .ctrl-btn { color: #ccc; cursor: pointer; margin-left: 15px; font-weight: bold; }
+        #episode-container { padding: 10px; background: #181818; max-height: 200px; overflow-y: auto; display: flex; flex-wrap: wrap; gap: 6px; }
+        .ep-btn { background: #333; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+        .ep-btn.active { background: var(--netflix); font-weight: bold; }
+
+        .filter-group { padding: 8px 20px; background: #1f1f1f; display: none; }
+        .filter-btn { background: #333; color: #ccc; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; padding: 4px 8px; margin: 2px; min-width: 50px; }
+        .filter-btn.active { background: var(--netflix); color: white; font-weight: bold; }
+        .progress-bar-container { width: 100%; height: 3px; background: #333; display: none; position: absolute; bottom: 0; left: 0; }
+        #search-progress { height: 100%; background: #e50914; width: 0%; transition: width 0.2s; }
+        .hits-info { color: #ff9800; font-size: 12px; display: flex; align-items: center; gap: 4px; margin-top: 4px; font-weight: bold; cursor: pointer; }
+        .history-controls { padding: 10px 20px; background: #1f1f1f; border-bottom: 1px solid #333; display: none; justify-content: space-between; align-items: center; }
+        .history-tags { display: flex; flex-wrap: wrap; gap: 8px; font-size: 12px; min-height: 20px; }
+        .tag { background: #444; padding: 2px 10px; border-radius: 12px; cursor: pointer; color: #bbb; }
+    </style>
+</head>
+<body>
+    <div class="header-nav">
+        <div class="source-bar">
+            <div><span>站點：</span>
+                <select id="api-source-select" class="source-select" onchange="App.switchSource(this.value)">
+                    <option value="LIVE_SOURCE">📺 直播頻道</option>
+                    <option value="MY_WISH_LIST">⭐ 我的待看清單</option>
+                    <option value="PLAY_HISTORY">🕒 播放紀錄</option>
+                    <option value="GLOBAL_SEARCH">🔍 全站搜尋</option>
+                </select>
+            </div>
+            <span id="api-status" style="font-size:11px; color:#0f0;">系統就緒</span>
+            <div class="progress-bar-container" id="progress-bar-container">
+                <div id="search-progress"></div>
+            </div>
+        </div>
+        <div id="history-controls" class="history-controls">
+            <button onclick="HistoryModule.clearAll()" style="background:#e50914; color:white; border:none; padding:8px 16px; border-radius:4px; cursor:pointer;">🗑️ 全部清除紀錄</button>
+            <span id="history-count" style="color:#aaa; font-size:13px;"></span>
+        </div>
+        <div class="search-area" id="search-area">
+            <div class="search-bar">
+                <input type="text" id="search-input" placeholder="搜尋全站資源..." onkeypress="if(event.keyCode==13) App.handleSearch()">
+                <button class="search-btn" onclick="App.handleSearch()">搜尋</button>
+                <button class="search-btn btn-series" onclick="App.seriesSearch()">系列模式</button>
+                <button class="search-btn btn-export" onclick="App.exportCurrentList()">導出清單</button>
+            </div>
+            <div class="history-tags" id="search-history"></div>
+        </div>
+        <div class="filter-group" id="filter-group">
+            <div id="year-bar" style="display:flex; flex-wrap:wrap; gap:3px; margin-bottom:10px;"></div>
+            <div id="type-bar" style="display:flex; flex-wrap:wrap; gap:3px;"></div>
+        </div>
+    </div>
+
+    <div id="movie-grid"></div>
+
+    <div id="live-layout">
+        <div class="live-cats" id="live-cats"></div>
+        <div class="live-list" id="live-list"></div>
+        <div class="live-player">
+            <video id="live-video" controls autoplay playsinline></video>
+        </div>
+    </div>
+
+    <div id="video-container">
+        <video id="vod-video" controls autoplay></video>
+        <div class="player-controls">
+            <span id="playing-title" style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">準備播放</span>
+            <div style="display:flex;">
+                <span class="ctrl-btn" onclick="VODModule.copyUrl()">💾 複製</span>
+                <span class="ctrl-btn" onclick="VODModule.closePlayer()">✕ 關閉</span>
+            </div>
+        </div>
+        <div id="episode-container"></div>
+    </div>
+
+    <script>
+        const $ = id => document.getElementById(id);
+        const URL_VALID_CAT = "https://raw.githubusercontent.com/ddhola/file/refs/heads/main/valid_categories.json";
+        let VALID_CAT_MAP = {};
+        const MAX_HISTORY = 100;
+
+        const Storage = {
+            get(k) { return JSON.parse(localStorage.getItem(k) || '[]'); },
+            set(k, v) { localStorage.setItem(k, JSON.stringify(v)); },
+            savePlay(item) {
+                let arr = this.get('play_h').filter(x => x.vod_id !== item.vod_id);
+                arr.unshift(item);
+                this.set('play_h', arr.slice(0, MAX_HISTORY));
+            },
+            saveSearch(wd) {
+                if (!wd) return;
+                let list = this.get('search_h').filter(i => i !== wd);
+                list.unshift(wd);
+                this.set('search_h', list.slice(0, 20));
+            },
+            saveProgress(url, time) {
+                if (time > 10) localStorage.setItem(`prog_${url}`, time);
+            }
+        };
+
+        const LiveModule = {
+            hls: new Hls(),
+            master: {}, order: [],
+            parse(text) {
+                let cur = "未分類"; this.master = {}; this.order = [];
+                text.split(/\r?\n/).forEach(l => {
+                    l = l.trim(); if (!l) return;
+                    let p = l.split(','); if (p.length < 2) return;
+                    if (p[1].trim().toLowerCase() === '#genre#') {
+                        cur = p[0].trim();
+                        if (!this.order.includes(cur)) { this.order.push(cur); this.master[cur] = []; }
+                    } else {
+                        if (!this.master[cur]) {
+                            this.master[cur] = [];
+                            if (!this.order.includes(cur)) this.order.push(cur);
+                        }
+                        this.master[cur].push({name: p[0].trim(), url: p[1].trim()});
+                    }
+                });
+            },
+            render() {
+                const catBox = $('live-cats');
+                catBox.innerHTML = this.order.map(c =>
+                    `<div class="cat-item" onclick="LiveModule.select('${c.replace(/'/g,"\\'")}',this)">${c}</div>`
+                ).join('');
+                if (this.order.length) this.select(this.order[0], catBox.querySelector('.cat-item'));
+            },
+            select(cat, el) {
+                [...document.querySelectorAll('.cat-item')].forEach(e => e.classList.remove('active'));
+                if(el) el.classList.add('active');
+                $('live-list').innerHTML = (this.master[cat] || []).map(ch =>
+                    `<div class="ch-item" onclick="LiveModule.play('${ch.url}','${ch.name.replace(/'/g,"\\'")}',this)">${ch.name}</div>`
+                ).join('');
+                $('live-list').scrollTop = 0;
+            },
+            play(url, name, el) {
+                [...document.querySelectorAll('.ch-item')].forEach(e => e.classList.remove('active'));
+                if(el) el.classList.add('active');
+                const v = $('live-video');
+                this.hls.destroy(); v.pause(); v.removeAttribute('src'); v.load();
+                if (Hls.isSupported() && url.includes('.m3u8')) {
+                    this.hls = new Hls(); this.hls.loadSource(url); this.hls.attachMedia(v);
+                    this.hls.on(Hls.Events.MANIFEST_PARSED, () => v.play());
+                } else {
+                    v.src = url; v.play().catch(e => {});
+                }
+            }
+        };
+
+        const VODModule = {
+            hls: new Hls(),
+            currentPlayUrl: "",
+            render(list, showSite = false) {
+                $('movie-grid').insertAdjacentHTML('beforeend', list.map(item => {
+                    const safe = btoa(encodeURIComponent(JSON.stringify(item)));
+                    const hits = item.vod_hits || Math.floor(Math.random() * 200) + 700;
+                    const site = showSite ? (item.siteName || (item.vod_year || '未知')) : (item.vod_year || '未知');
+                    const delBtn = item.fromHistory ? `<span class="delete-btn" onclick="HistoryModule.remove('${item.vod_id}', event)">×</span>` : '';
+                    return `<div class="card" data-hits="${hits}">
+                        ${delBtn}
+                        <div class="source-tag">${site}</div>
+                        <img src="${item.vod_pic||''}" onerror="this.src='https://via.placeholder.com/120x84?text=No+Img'" onclick="VODModule.showEpisodes('${safe}')">
+                        <div class="info">
+                            <p onclick="VODModule.showEpisodes('${safe}')">${item.vod_name}</p>
+                            <span>${item.vod_remarks||''}</span>
+                            <div class="hits-info" onclick="VODModule.sortByHits()">🔥 熱度: ${hits}</div>
+                        </div>
+                    </div>`;
+                }).join(''));
+            },
+            showEpisodes(safe) {
+                try {
+                    const data = JSON.parse(decodeURIComponent(atob(safe)));
+                    if (data.siteApi) App.current = data.siteApi;
+                    Storage.savePlay(data);
+                    $('playing-title').textContent = data.vod_name;
+                    const cont = $('episode-container');
+                    cont.innerHTML = '';
+                    const playStr = data.vod_play_url || '';
+                    const groups = playStr.includes('$$$') ? playStr.split('$$$') : [playStr];
+                    const eps = groups[0].split('#').filter(Boolean);
+                    eps.forEach(e => {
+                        let [no, url] = e.split('$').map(s=>s.trim());
+                        if (!url) return;
+                        const btn = document.createElement('button');
+                        btn.className = 'ep-btn'; btn.textContent = no || '播放';
+                        btn.onclick = () => {
+                            [...cont.querySelectorAll('.ep-btn')].forEach(b=>b.classList.remove('active'));
+                            btn.classList.add('active');
+                            this.play(url, `${data.vod_name} ${no||''}`);
+                        };
+                        cont.appendChild(btn);
+                    });
+                    $('video-container').style.display = 'flex';
+                    if (cont.querySelector('.ep-btn')) cont.querySelector('.ep-btn').click();
+                } catch(e) {}
+            },
+            play(url, title) {
+                this.currentPlayUrl = url;
+                $('playing-title').textContent = title;
+                const v = $('vod-video');
+                this.hls.destroy();
+                const saved = parseFloat(localStorage.getItem(`prog_${url}`)) || 0;
+                if (Hls.isSupported()) {
+                    this.hls = new Hls(); this.hls.loadSource(url); this.hls.attachMedia(v);
+                    this.hls.on(Hls.Events.MANIFEST_PARSED, () => { if (saved > 0) v.currentTime = saved; v.play(); });
+                } else {
+                    v.src = url; if (saved > 0) v.currentTime = saved; v.play();
+                }
+                v.ontimeupdate = () => Storage.saveProgress(url, v.currentTime);
+            },
+            closePlayer() { $('vod-video').pause(); $('video-container').style.display = 'none'; },
+            copyUrl() { navigator.clipboard.writeText(this.currentPlayUrl).then(() => alert("已複製")); },
+            sortByHits() {
+                const grid = $('movie-grid');
+                const cards = Array.from(grid.querySelectorAll('.card'));
+                cards.sort((a, b) => (parseInt(b.getAttribute('data-hits')) || 0) - (parseInt(a.getAttribute('data-hits')) || 0));
+                grid.innerHTML = ''; cards.forEach(card => grid.appendChild(card));
+            }
+        };
+
+        const SiteVODModule = {
+            currentApi: null,
+            state: { pg: 1, tid: '', year: '', wd: '', isLoading: false },
+            categories: [],
+            async loadCategories() {
+                if (!this.currentApi) return;
+                try {
+                    const res = await fetch(`${this.currentApi}?ac=list`);
+                    const data = await res.json();
+                    this.categories = data.class || [];
+                    let matchedKey = this.currentApi;
+                    if (matchedKey.endsWith('/')) matchedKey = matchedKey.slice(0, -1);
+                    const baseUrl = matchedKey.split('/from/')[0].split('/at/')[0];
+                    this.whiteList = VALID_CAT_MAP[matchedKey] || VALID_CAT_MAP[baseUrl + '/'] || VALID_CAT_MAP[baseUrl];
+                    this.renderFilters();
+                } catch(e) {}
+            },
+            renderFilters() {
+                const now = new Date().getFullYear();
+                const years = ['全部', ...Array.from({length: now - 2006}, (_,i) => now - i)];
+                $('year-bar').innerHTML = years.map(y => {
+                    const val = y === '全部' ? '' : String(y);
+                    const active = this.state.year === val ? ' active' : '';
+                    return `<button class="filter-btn${active}" onclick="SiteVODModule.setFilter('year','${val}')">${y}</button>`;
+                }).join('');
+                let filteredCats = this.categories;
+                if (this.whiteList && Array.isArray(this.whiteList)) {
+                    filteredCats = this.categories.filter(cls => this.whiteList.includes(String(cls.type_id)));
+                }
+                $('type-bar').innerHTML = [{type_id:'', type_name:'全部分類'}, ...filteredCats].map(c => {
+                    const tid = String(c.type_id);
+                    const active = this.state.tid === tid ? ' active' : '';
+                    return `<button class="filter-btn${active}" onclick="SiteVODModule.setFilter('tid','${tid}')">${c.type_name}</button>`;
+                }).join('');
+                $('filter-group').style.display = 'block';
+            },
+            setFilter(key, value) {
+                this.state[key] = value; this.state.pg = 1; this.state.isLoading = false;
+                $('movie-grid').innerHTML = ''; this.loadPage(); this.renderFilters();
+            },
+            async loadPage(append = false) {
+                if (this.state.isLoading || !this.currentApi) return;
+                this.state.isLoading = true;
+                $('api-status').textContent = '載入中...';
+                try {
+                    let url = `${this.currentApi}?ac=detail&pg=${this.state.pg}&t=${this.state.tid}&year=${this.state.year}`;
+                    if (this.state.wd) url += `&wd=${encodeURIComponent(this.state.wd)}`;
+                    const res = await fetch(url);
+                    const data = await res.json();
+                    const list = data.list || [];
+                    if (!append) $('movie-grid').innerHTML = '';
+                    VODModule.render(list, false);
+                    if (list.length > 0) this.state.pg++;
+                    $('api-status').textContent = `第 ${this.state.pg-1} 頁 (${list.length} 項)`;
+                } catch(e) {}
+                this.state.isLoading = false;
+            },
+            reset() { this.state = { pg: 1, tid: '', year: '', wd: '', isLoading: false }; this.currentApi = null; $('filter-group').style.display = 'none'; }
+        };
+
+        const GlobalSearch = {
+            async exec(keyword) {
+                if (!keyword) return;
+                $('movie-grid').innerHTML = '';
+                const progCont = $('progress-bar-container');
+                const progBar = $('search-progress');
+                progCont.style.display = 'block';
+                let completed = 0;
+                for (let site of App.API_LIST) {
+                    try {
+                        const res = await fetch(`${site.api}?ac=detail&wd=${encodeURIComponent(keyword)}`);
+                        const data = await res.json();
+                        let list = (data.list || []).filter(i => i.vod_name.includes(keyword)).map(i => ({ ...i, siteName: site.name, siteApi: site.api }));
+                        if (list.length > 0) VODModule.render(list, true);
+                    } catch (e) {}
+                    completed++;
+                    progBar.style.width = `${(completed / App.API_LIST.length) * 100}%`;
+                }
+                setTimeout(() => { progCont.style.display = 'none'; }, 1000);
+                Storage.saveSearch(keyword); App.renderSearchHistory();
+            }
+        };
+
+        const WishList = {
+            async load() {
+                try {
+                    const res = await fetch("https://raw.githubusercontent.com/ddhola/file/refs/heads/main/play_list.txt?t="+Date.now());
+                    const text = await res.text();
+                    const titles = text.split('\n').map(t=>t.trim()).filter(t=>t&&!t.includes(':'));
+                    $('movie-grid').innerHTML = titles.map(t => `
+                        <div class="card" onclick="WishList.searchCard('${t.replace(/'/g,"\\'")}', this)">
+                            <div class="source-tag">待搜尋</div>
+                            <div style="width:120px;height:84px;background:#333;display:flex;align-items:center;justify-content:center;color:#555;">?</div>
+                            <div class="info"><p>${t}</p><span class="status">點擊開始搜尋</span></div>
+                        </div>
+                    `).join('');
+                } catch(e) {}
+            },
+            async searchCard(title, card) {
+                if (card.style.opacity === "0.6" || card.getAttribute('data-done')) return;
+                const status = card.querySelector('.status');
+                card.style.opacity = "0.6"; status.innerText = "搜尋中...";
+                for (let site of App.API_LIST) {
+                    try {
+                        const res = await fetch(`${site.api}?ac=detail&wd=${encodeURIComponent(title)}`);
+                        const data = await res.json();
+                        const match = (data.list||[]).find(it => it.vod_name === title);
+                        if (match) {
+                            match.siteName = site.name; match.siteApi = site.api;
+                            const safe = btoa(encodeURIComponent(JSON.stringify(match)));
+                            card.innerHTML = `<div class="source-tag">${site.name}</div><img src="${match.vod_pic}" onclick="VODModule.showEpisodes('${safe}')"><div class="info"><p>${match.vod_name}</p><span>${match.vod_remarks}</span></div>`;
+                            card.style.opacity = '1'; card.setAttribute('data-done', 'true'); return;
+                        }
+                    } catch(e) {}
+                }
+                status.innerText = '未找到'; card.style.opacity = '1';
+            }
+        };
+
+        const HistoryModule = {
+            render() {
+                $('movie-grid').innerHTML = '';
+                const list = Storage.get('play_h');
+                $('history-count').textContent = `共 ${list.length} 筆`;
+                $('history-controls').style.display = 'flex';
+                list.forEach(item => { item.fromHistory = true; });
+                VODModule.render(list, true);
+            },
+            remove(vod_id, e) {
+                e.stopPropagation();
+                let list = Storage.get('play_h').filter(h => String(h.vod_id) !== String(vod_id));
+                Storage.set('play_h', list); this.render();
+            },
+            clearAll() { if (confirm("確定清除？")) { localStorage.removeItem('play_h'); this.render(); } }
+        };
+
+        const App = {
+            API_LIST: [], LIVE_RAW: "", current: "LIVE_SOURCE",
+            async init() {
+                try {
+                    const [vRes, lRes, cRes] = await Promise.all([
+                        fetch("https://raw.githubusercontent.com/ddhola/file/refs/heads/main/Wtvbox_list2.txt?t="+Date.now()),
+                        fetch("https://raw.githubusercontent.com/ddhola/file/refs/heads/main/Wtvbox_list1.txt?t="+Date.now()),
+                        fetch(URL_VALID_CAT + "?t=" + Date.now())
+                    ]);
+                    this.LIVE_RAW = await lRes.text();
+                    const txt = await vRes.text();
+                    const reg = /\{ name: "(.*?)", api: "(.*?)" \}/g;
+                    let m; while (m = reg.exec(txt)) this.API_LIST.push({name:m[1], api:m[2]});
+                    if (cRes.ok) VALID_CAT_MAP = await cRes.json();
+                    const sel = $('api-source-select');
+                    this.API_LIST.forEach(site => {
+                        const opt = document.createElement('option');
+                        opt.value = site.api; opt.textContent = "🎬 " + site.name;
+                        sel.appendChild(opt);
+                    });
+                    sel.value = "LIVE_SOURCE";
+                    this.switchSource("LIVE_SOURCE");
+                    this.renderSearchHistory();
+                } catch(e) {}
+            },
+            switchSource(val) {
+                if (LiveModule.hls) LiveModule.hls.destroy();
+                const liveVideo = $('live-video');
+                if (liveVideo) { liveVideo.pause(); liveVideo.src = ''; }
+                this.current = val;
+                SiteVODModule.reset();
+                $('history-controls').style.display = 'none';
+                $('movie-grid').style.display = (val === "LIVE_SOURCE") ? 'none' : 'grid';
+                $('live-layout').style.display = (val === "LIVE_SOURCE") ? 'flex' : 'none';
+                $('search-area').classList.toggle('visible', val === "GLOBAL_SEARCH");
+                $('movie-grid').innerHTML = '';
+                if (val === "LIVE_SOURCE") {
+                    LiveModule.parse(this.LIVE_RAW); LiveModule.render();
+                } else if (val === "MY_WISH_LIST") {
+                    WishList.load();
+                } else if (val === "PLAY_HISTORY") {
+                    HistoryModule.render();
+                } else if (val.startsWith('http')) {
+                    SiteVODModule.currentApi = val; SiteVODModule.loadCategories(); SiteVODModule.loadPage();
+                }
+            },
+            handleSearch() {
+                const kw = $('search-input').value.trim();
+                if (kw) {
+                    this.current = "GLOBAL_SEARCH"; // 確保切換模式
+                    GlobalSearch.exec(kw);
+                }
+            },
+            seriesSearch: async function() {
+                const wd = $('search-input').value.trim();
+                if (!wd) return;
+                $('movie-grid').innerHTML = '';
+                for (let site of this.API_LIST) {
+                    try {
+                        const res = await fetch(`${site.api}?ac=detail&wd=${encodeURIComponent(wd)}`);
+                        const data = await res.json();
+                        let list = (data.list || []).filter(i => i.vod_name.includes(wd));
+                        if (list.length > 0) { VODModule.render(list, true); return; }
+                    } catch(e) {}
+                }
+            },
+            exportCurrentList() {
+                const titles = Array.from(document.querySelectorAll('.info p')).map(p => p.innerText.trim());
+                navigator.clipboard.writeText(titles.join('\n')).then(() => alert("已導出"));
+            },
+            renderSearchHistory() {
+                $('search-history').innerHTML = Storage.get('search_h').map(h => `<span class="tag" onclick="App.doQuickSearch('${h.replace(/'/g,"\\'")}')">${h}</span>`).join('');
+            },
+            doQuickSearch(wd) { $('search-input').value = wd; this.handleSearch(); }
+        };
+
+        window.addEventListener('scroll', () => {
+            if (App.current && App.current.startsWith('http') && (window.innerHeight + window.scrollY) >= document.body.offsetHeight - 800 && !SiteVODModule.state.isLoading) {
+                SiteVODModule.loadPage(true);
+            }
+        });
+
+        App.init();
+        setInterval(() => {
+            const v = $('vod-video');
+            if (!v.paused && v.src) Storage.saveProgress(v.src, v.currentTime);
+        }, 5000);
+    </script>
+</body>
+</html>
