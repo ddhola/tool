@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>天天影視</title>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        :root { --primary-color: #141414; --header-bg: rgba(20, 20, 20, 0.9); --accent-color: #3b82f6; --card-bg: #222; --text-color: white; --card-hover-bg: #333; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--primary-color); color: var(--text-color); margin: 0; padding: 0; }
+        
+        header { background-color: var(--header-bg); padding: 15px 50px; display: flex; justify-content: space-between; align-items: center; position: fixed; top: 0; left: 0; width: 100%; z-index: 100; backdrop-filter: blur(10px); box-sizing: border-box; border-bottom: 1px solid #333; }
+        .logo { display: flex; align-items: center; color: #fff; font-size: 24px; text-decoration: none; font-weight: bold; }
+        .logo i { color: #5bc0de; margin-right: 10px; font-size: 28px; }
+
+        .nav-container { position: relative; margin-left: 20px; }
+        .nav-label { color: #fff; text-decoration: none; cursor: pointer; font-size: 18px; padding: 10px; }
+        .nav-label::after { content: '\f107'; font-family: 'Font Awesome 6 Free'; font-weight: 900; margin-left: 5px; font-size: 14px; }
+
+        .dropdown-content { display: none; position: absolute; top: 100%; left: 0; background-color: #1a1a1a; min-width: 600px; border-radius: 8px; box-shadow: 0px 8px 16px rgba(0,0,0,0.5); padding: 20px; z-index: 110; border: 1px solid #444; grid-template-columns: repeat(5, 1fr); gap: 20px; }
+        .nav-container:hover .dropdown-content { display: grid; }
+        .dropdown-col h4 { color: #5bc0de; margin-top: 0; margin-bottom: 10px; font-size: 16px; border-bottom: 1px solid #333; padding-bottom: 5px; }
+        .dropdown-item { color: #ccc; padding: 8px 0; text-decoration: none; display: block; cursor: pointer; font-size: 14px; transition: color 0.2s; }
+        .dropdown-item:hover { color: #fff; text-shadow: 0 0 5px rgba(255,255,255,0.5); }
+
+        .search-bar { position: relative; display: flex; align-items: center; background: #333; border-radius: 20px; padding: 5px 15px; width: 300px; }
+        .search-input { border: none; outline: none; background: transparent; font-size: 16px; padding: 5px; flex-grow: 1; color: #fff; }
+        .search-btn { background-color: var(--accent-color); color: white; border: none; border-radius: 20px; padding: 8px 15px; cursor: pointer; font-size: 14px; display: flex; align-items: center; z-index: 2; }
+        .search-dropdown { display: none; position: absolute; top: 100%; left: 0; width: 100%; background: #1a1a1a; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.8); padding: 15px; margin-top: 10px; z-index: 120; border: 1px solid #444; box-sizing: border-box; }
+        .search-section-title { color: #888; font-size: 12px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+        .clear-history { cursor: pointer; color: #5bc0de; font-size: 11px; }
+        .clear-history:hover { text-decoration: underline; }
+        .search-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+        .search-tag { background: #333; color: #ccc; padding: 5px 10px; border-radius: 15px; font-size: 13px; cursor: pointer; transition: 0.2s; border: 1px solid #444; }
+        .search-tag:hover { background: #5bc0de; color: #fff; border-color: #5bc0de; }
+
+        #main-content { padding-top: 100px; padding-bottom: 50px; display: flex; flex-direction: column; align-items: center; }
+        .movie-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px; width: 95%; max-width: 1400px; }
+        .movie-card { background: var(--card-bg); padding: 10px; border-radius: 8px; text-align: center; cursor: pointer; transition: transform 0.2s; position: relative; }
+        .movie-card:hover { transform: scale(1.05); background: var(--card-hover-bg); z-index: 10; box-shadow: 0 10px 20px rgba(0,0,0,0.5); }
+        .movie-card img { width: 100%; height: 280px; object-fit: cover; border-radius: 4px; }
+        .movie-card h3 { font-size: 15px; margin: 10px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .card-remarks { font-size: 12px; color: #fff; position: absolute; top: 15px; right: 15px; background: rgba(229, 9, 20, 0.8); padding: 3px 6px; border-radius: 3px; font-weight: bold; }
+
+        #loader-indicator { display: none; padding: 20px; text-align: center; font-size: 18px; color: #aaa; margin-top: 20px; width: 100%; }
+        #history-btn { position: fixed; bottom: 20px; right: 20px; background-color: #e50914; color: white; padding: 12px 20px; border-radius: 30px; cursor: pointer; box-shadow: 0 4px 15px rgba(229, 9, 20, 0.4); z-index: 90; font-weight: bold; }
+
+        .modal { display: none; position: fixed; z-index: 200; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.95); justify-content: center; align-items: center; flex-direction: column; }
+        .modal-content { background-color: var(--primary-color); border-radius: 8px; max-width: 900px; width: 90%; padding: 20px; position: relative; text-align: center; border: 1px solid #333; }
+        .close-modal { position: absolute; top: 10px; right: 20px; color: #aaa; font-size: 30px; cursor: pointer; z-index: 300; }
+        .close-modal:hover { color: #fff; }
+        
+        #player-section { position: relative; }
+        video { width: 100%; max-height: 60vh; border-radius: 4px; background: #000; outline: none; }
+        
+        #episode-container { margin-top: 15px; text-align: left; }
+        .episode-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px; margin-top: 10px; max-height: 180px; overflow-y: auto; padding-right: 5px; }
+        .ep-btn { background-color: #333; color: white; border: 1px solid #555; padding: 8px 5px; border-radius: 4px; cursor: pointer; font-size: 14px; text-align: center; transition: 0.2s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .ep-btn:hover { background-color: #555; }
+        .ep-btn.active { background-color: var(--accent-color); border-color: var(--accent-color); color: white; font-weight: bold; }
+
+        #history-list { text-align: left; max-height: 60vh; overflow-y: auto; padding-right: 10px; }
+        .history-item { display: flex; align-items: center; border-bottom: 1px solid #333; padding: 15px 10px; cursor: pointer; transition: background 0.2s; border-radius: 6px; }
+        .history-item:hover { background-color: #333; }
+        .history-item img { width: 60px; height: 80px; object-fit: cover; border-radius: 4px; margin-right: 15px; }
+        .history-item info { display: flex; flex-direction: column; justify-content: space-between; height: 100%; }
+        .history-ep { color: #5bc0de; font-size: 13px; font-weight: bold; margin-top: 5px; }
+
+        #player-toast { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: rgba(0, 0, 0, 0.8); color: white; padding: 15px 30px; border-radius: 8px; font-size: 24px; font-weight: bold; pointer-events: none; opacity: 0; transition: opacity 0.3s ease; z-index: 300; }
+        #speed-control-wrapper { position: absolute; right: 20px; top: 50%; transform: translateY(-50%); z-index: 150; display: flex; flex-direction: column; align-items: center; }
+        .speed-menu { display: none; background: rgba(30, 30, 30, 0.6); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-radius: 12px; padding: 10px 0; margin-bottom: 10px; flex-direction: column; text-align: center; width: 80px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        #speed-control-wrapper:hover .speed-menu { display: flex; animation: fadeIn 0.2s ease-in-out; }
+        .speed-item { padding: 10px; color: #ddd; cursor: pointer; font-size: 15px; transition: 0.2s; }
+        .speed-item:hover, .speed-item.active { color: white; background: rgba(255, 255, 255, 0.2); font-weight: bold; }
+        .speed-btn-toggle { background: rgba(0, 0, 0, 0.6); color: white; padding: 8px 15px; border-radius: 20px; cursor: pointer; font-size: 14px; border: 1px solid rgba(255,255,255,0.2); }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        #long-press-toast { position: absolute; top: 30px; left: 50%; transform: translateX(-50%); background: rgba(0, 0, 0, 0.7); color: white; padding: 8px 25px; border-radius: 30px; font-size: 16px; font-weight: bold; display: none; z-index: 200; pointer-events: none; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <div style="display: flex; align-items: center;">
+            <a href="#" class="logo" onclick="fetchByCategory(5, '动作片'); return false;">
+                <i class="fa-solid fa-play"></i>天天影視
+            </a>
+            <nav class="nav-container">
+                <a class="nav-label">所有分類</a>
+                <div id="dynamic-nav" class="dropdown-content"></div>
+            </nav>
+        </div>
+        
+        <div class="search-bar">
+            <input type="text" id="search-input" class="search-input" placeholder="請輸入影片名稱..." autocomplete="off">
+            <button id="search-btn" class="search-btn"><i class="fa-solid fa-search"></i>搜尋</button>
+            <div id="search-dropdown" class="search-dropdown">
+                <div class="search-section-title">
+                    歷史搜尋 <span class="clear-history" onclick="clearSearchHistory()"><i class="fa-solid fa-trash-can"></i> 清除</span>
+                </div>
+                <div id="history-tags" class="search-tags"></div>
+                <div class="search-section-title" style="margin-top:15px;">🔥 熱門搜尋</div>
+                <div class="search-tags">
+                    <span class="search-tag" onclick="quickSearch('甄嬛传')">甄嬛传</span>
+                    <span class="search-tag" onclick="quickSearch('周星驰')">周星驰</span>
+                    <span class="search-tag" onclick="quickSearch('漫威')">漫威</span>
+                    <span class="search-tag" onclick="quickSearch('海贼王')">海贼王</span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main id="main-content">
+        <h2 id="current-category-title" style="align-self: flex-start; margin-left: 2.5%; margin-bottom: 20px; border-left: 4px solid #5bc0de; padding-left: 10px;">动作片</h2>
+        <div id="movie-grid" class="movie-grid"></div>
+        <div id="loader-indicator"><i class="fa-solid fa-circle-notch fa-spin"></i> 正在載入下一頁...</div>
+    </main>
+
+    <div id="history-btn" onclick="showHistory()"><i class="fa-solid fa-clock-rotate-left"></i> 觀看紀錄</div>
+
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeModal()">&times;</span>
+            
+            <div id="player-section" style="display: none;">
+                <h2 id="now-playing-title" style="margin-top: 0; font-size: 20px;"></h2>
+                <video id="video-player" controls autoplay></video>
+                <div id="player-toast">1.5x 速度</div>
+                <div id="long-press-toast">⏩ 3.0X 快速撥放中</div>
+                
+                <div id="speed-control-wrapper">
+                    <div class="speed-menu">
+                        <div class="speed-item" onclick="changeSpeed(3.0)">3.0X</div>
+                        <div class="speed-item" onclick="changeSpeed(2.0)">2.0X</div>
+                        <div class="speed-item" onclick="changeSpeed(1.5)">1.5X</div>
+                        <div class="speed-item" onclick="changeSpeed(1.25)">1.25X</div>
+                        <div class="speed-item active" onclick="changeSpeed(1.0)" id="speed-1-0">1.0X</div>
+                        <div class="speed-item" onclick="changeSpeed(0.8)">0.8X</div>
+                    </div>
+                    <div class="speed-btn-toggle" id="current-speed-btn">倍速</div>
+                </div>
+                <div id="episode-container"></div>
+            </div>
+            
+            <div id="history-section" style="display: none;">
+                <h2 style="margin-top: 0; border-bottom: 1px solid #333; padding-bottom: 10px; text-align: left;"><i class="fa-solid fa-clock-rotate-left"></i> 我的觀看紀錄</h2>
+                <div id="history-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 1. 分類資料與選單生成
+        const categoryData = [
+            { groupName: "🎬 電影", items: [ {id: 5, name: "动作片"}, {id: 6, name: "喜剧片"}, {id: 7, name: "爱情片"}, {id: 8, name: "科幻片"}, {id: 9, name: "恐怖片"}, {id: 10, name: "剧情片"}, {id: 11, name: "战争片"}, {id: 20, name: "记录片"}, {id: 41, name: "动画片"} ] },
+            { groupName: "📺 劇集", items: [ {id: 12, name: "国产剧"}, {id: 13, name: "台湾剧"}, {id: 14, name: "韩国剧"}, {id: 15, name: "欧美剧"}, {id: 16, name: "香港剧"}, {id: 17, name: "泰国剧"}, {id: 18, name: "日本剧"}, {id: 54, name: "海外剧"} ] },
+            { groupName: "🎉 綜藝", items: [ {id: 62, name: "大陆综艺"}, {id: 63, name: "港台综艺"}, {id: 64, name: "日韩综艺"}, {id: 65, name: "欧美综艺"} ] },
+            { groupName: "👾 動漫", items: [ {id: 4, name: "动漫总汇"}, {id: 66, name: "国产动漫"}, {id: 67, name: "日韩动漫"}, {id: 68, name: "欧美动漫"}, {id: 69, name: "港台动漫"}, {id: 70, name: "海外动漫"} ] },
+            { groupName: "🔥 福利", items: [ 
+                {id: 19, name: "福利专区"}, 
+                {id: 61, name: "伦理片"},
+                {id: 93, name: "日本"},
+                {id: 94, name: "日本中文"},
+                {id: 95, name: "无码流出"},
+                {id: 96, name: "FC2"},
+                {id: 97, name: "HEYZO"},
+                {id: 98, name: "东京热"},
+                {id: 99, name: "一本道"}
+            ] }
+        ];
+
+        function renderMenu() {
+            const nav = document.getElementById('dynamic-nav');
+            categoryData.forEach(group => {
+                const col = document.createElement('div'); col.className = 'dropdown-col';
+                let html = `<h4>${group.groupName}</h4>`;
+                group.items.forEach(item => html += `<a class="dropdown-item" onclick="fetchByCategory(${item.id}, '${item.name}')">${item.name}</a>`);
+                col.innerHTML = html; nav.appendChild(col);
+            });
+        }
+        renderMenu();
+
+        // 2. 全域變數與 API 獲取
+        const API_BASE_URL_DEFAULT = 'https://api.1080zyku.com/inc/apijson.php';
+        const API_BASE_URL_CK = 'https://ckbh1.xyz/api.php/provide/vod/';
+        
+        let currentPage = 1, currentCategoryId = 5, searchQuery = '', isLoading = false;
+        const movieGrid = document.getElementById('movie-grid'), loaderIndicator = document.getElementById('loader-indicator'), categoryTitle = document.getElementById('current-category-title');
+        
+        const modal = document.getElementById('modal'), videoPlayer = document.getElementById('video-player');
+        let currentHls = null, currentPlayingId = null, currentPlayingUrl = null;
+        let globalEpisodes = [], globalTitle = '', globalPic = '', globalId = '';
+
+        // 根據項目 ID 判斷該調用哪一個 API 網址
+        function getApiUrlByCategoryId(catId) {
+            const id = parseInt(catId, 10);
+            if (id >= 93 && id <= 99) {
+                return API_BASE_URL_CK;
+            }
+            return API_BASE_URL_DEFAULT;
+        }
+
+        function parseEpisodes(playUrlStr) {
+            if (!playUrlStr) return [];
+            // 分流解析：處理不同 API 傳回的分隔符號可能不同的狀況
+            const sourceStr = playUrlStr.split('$$$')[0]; 
+            const episodesRaw = sourceStr.split('#');
+            const episodes = [];
+            episodesRaw.forEach(ep => {
+                const parts = ep.split('$');
+                if (parts.length >= 2 && parts[1].includes('.m3u8')) episodes.push({ name: parts[0], url: parts[1] });
+                else if (parts.length === 1 && ep.includes('.m3u8')) episodes.push({ name: "播放", url: ep });
+            });
+            return episodes;
+        }
+
+        async function fetchMovies(replaceGrid = false) {
+            if (isLoading) return; isLoading = true; if (replaceGrid) movieGrid.innerHTML = '';
+            loaderIndicator.style.display = 'block';
+            try {
+                const baseUrl = getApiUrlByCategoryId(currentCategoryId);
+                const response = await fetch(`${baseUrl}?ac=videolist&pg=${currentPage}&t=${currentCategoryId}&wd=${searchQuery}`);
+                const data = await response.json();
+                if (data && data.list) {
+                    loaderIndicator.style.display = 'none'; isLoading = false;
+                    if (data.list.length === 0 && currentPage === 1) { movieGrid.innerHTML = '<p style="text-align: center; grid-column: 1 / -1; font-size: 20px;">找不到相關結果。</p>'; return; }
+                    data.list.forEach(movie => {
+                        const episodes = parseEpisodes(movie.vod_play_url);
+                        if (episodes.length === 0) return;
+                        const card = document.createElement('div'); card.className = 'movie-card';
+                        card.innerHTML = `<span class="card-remarks">${movie.vod_remarks || '高清'}</span><img src="${movie.vod_pic || 'https://via.placeholder.com/200x280?text=No+Cover'}" onerror="this.src='https://via.placeholder.com/200x280?text=Error'"><h3>${movie.vod_name}</h3>`;
+                        card.onclick = () => playVideo(episodes, movie.vod_name, movie.vod_pic, movie.vod_id);
+                        movieGrid.appendChild(card);
+                    });
+                }
+            } catch (error) { isLoading = false; loaderIndicator.style.display = 'none'; }
+        }
+
+        // 3. 搜尋、歷史紀錄與無限滾動
+        function fetchByCategory(id, name) { currentCategoryId = id; searchQuery = ''; currentPage = 1; categoryTitle.innerText = name || "分類結果"; fetchMovies(true); }
+        
+        const SEARCH_HISTORY_KEY = 'ub_search_history';
+        const searchInput = document.getElementById('search-input'), searchDropdown = document.getElementById('search-dropdown'), historyTagsContainer = document.getElementById('history-tags');
+
+        // 當處於全域搜尋時（currentCategoryId 為 0），由搜尋關鍵字決定呼叫的 API（預設主API）
+        function getApiUrlByHistoryItem(item) {
+            if (item.catId) {
+                return getApiUrlByCategoryId(item.catId);
+            }
+            return API_BASE_URL_DEFAULT;
+        }
+
+        function renderSearchHistory() {
+            let history = JSON.parse(localStorage.getItem(SEARCH_HISTORY_KEY) || '[]');
+            historyTagsContainer.innerHTML = '';
+            if (history.length === 0) { historyTagsContainer.innerHTML = '<span style="color:#666; font-size:12px;">暫無紀錄</span>'; return; }
+            history.forEach(keyword => {
+                const span = document.createElement('span'); span.className = 'search-tag'; span.innerText = keyword;
+                span.onclick = () => quickSearch(keyword); historyTagsContainer.appendChild(span);
+            });
+        }
+
+        function saveSearchHistory(keyword) {
+            if (!keyword) return;
+            let history = JSON.parse(localStorage.getItem(SEARCH_HISTORY_KEY) || '[]');
+            history = history.filter(k => k !== keyword); history.unshift(keyword);
+            if (history.length > 8) history.pop();
+            localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(history));
+        }
+
+        function clearSearchHistory() { localStorage.removeItem(SEARCH_HISTORY_KEY); renderSearchHistory(); }
+        function quickSearch(keyword) { searchInput.value = keyword; searchDropdown.style.display = 'none'; performSearch(); }
+
+        document.getElementById('search-btn').onclick = performSearch;
+        searchInput.onkeypress = (e) => { if (e.key === 'Enter') performSearch(); };
+        searchInput.addEventListener('focus', () => { renderSearchHistory(); searchDropdown.style.display = 'block'; });
+        document.addEventListener('click', (e) => { if (!e.target.closest('.search-bar')) searchDropdown.style.display = 'none'; });
+
+        function performSearch() { 
+            const query = searchInput.value.trim(); 
+            if (query) { searchQuery = query; currentCategoryId = 0; currentPage = 1; categoryTitle.innerText = `搜尋結果: "${query}"`; saveSearchHistory(query); searchDropdown.style.display = 'none'; fetchMovies(true); } 
+        }
+        window.addEventListener('scroll', () => { if ((window.innerHeight + window.scrollY) >= (document.body.offsetHeight - 600)) { if (!isLoading) { currentPage++; fetchMovies(false); } } });
+
+        // 4. 播放器、選集與自動連播
+        function formatTime(seconds) {
+            if (!seconds) return "00:00";
+            const h = Math.floor(seconds / 3600), m = Math.floor((seconds % 3600) / 60), s = Math.floor(seconds % 60);
+            return h > 0 ? `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}` : `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        }
+
+        function playVideo(episodes, title, pic, id) {
+            globalEpisodes = episodes; globalTitle = title; globalPic = pic; globalId = id;
+            modal.style.display = 'flex'; document.getElementById('player-section').style.display = 'block'; document.getElementById('history-section').style.display = 'none';
+            const episodeContainer = document.getElementById('episode-container'); episodeContainer.innerHTML = ''; 
+
+            if (episodes.length > 1) {
+                const label = document.createElement('div'); label.style = "font-size: 16px; margin-bottom: 5px;"; label.innerText = `選集 (${episodes.length}集)：`; episodeContainer.appendChild(label);
+                const grid = document.createElement('div'); grid.className = 'episode-grid';
+                episodes.forEach((ep, index) => {
+                    const btn = document.createElement('button'); btn.className = `ep-btn ${index === 0 ? 'active' : ''}`; btn.innerText = ep.name;
+                    btn.onclick = function() { switchEpisode(ep.url, this, title, ep.name, pic, id); };
+                    grid.appendChild(btn);
+                });
+                episodeContainer.appendChild(grid);
+            }
+            loadM3u8(episodes[0].url, title, episodes.length > 1 ? episodes[0].name : '', pic, id);
+        }
+
+        function switchEpisode(m3u8Url, btnElement, title, epName, pic, id) {
+            document.querySelectorAll('.ep-btn').forEach(btn => btn.classList.remove('active'));
+            if (btnElement) btnElement.classList.add('active');
+            loadM3u8(m3u8Url, title, epName, pic, id);
+        }
+
+        let isAutoPlaying = false; 
+        let autoPlayTimer = null;
+
+        function loadM3u8(m3u8Url, title, epName, pic, id) {
+            isAutoPlaying = false; 
+            clearTimeout(autoPlayTimer);
+            document.getElementById('now-playing-title').innerHTML = epName ? `${title} - <span style="color:#5bc0de">${epName}</span>` : title;
+            currentPlayingId = id; currentPlayingUrl = m3u8Url;
+
+            let history = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+            let savedItem = history.find(item => item.id === id && item.url === m3u8Url);
+            let startProgress = savedItem ? (savedItem.progress || 0) : 0;
+            saveToHistory(id, title, pic, epName, m3u8Url, startProgress, currentCategoryId);
+
+            if (currentHls) currentHls.destroy();
+
+            const onMetaDataLoaded = () => {
+                if (startProgress > 0) { videoPlayer.currentTime = startProgress; showToast(`從 ${formatTime(startProgress)} 繼續播放`); }
+                videoPlayer.play(); changeSpeed(1.0);
+                document.querySelectorAll('.speed-item').forEach(el => el.classList.remove('active')); document.getElementById('speed-1-0').classList.add('active');
+            };
+
+            if (Hls.isSupported()) {
+                currentHls = new Hls(); currentHls.loadSource(m3u8Url); currentHls.attachMedia(videoPlayer);
+                currentHls.on(Hls.Events.MANIFEST_PARSED, () => videoPlayer.addEventListener('loadedmetadata', onMetaDataLoaded, { once: true }));
+            } else if (videoPlayer.canPlayType('application/vnd.apple.mpegurl')) {
+                videoPlayer.src = m3u8Url; videoPlayer.addEventListener('loadedmetadata', onMetaDataLoaded, { once: true });
+            }
+        }
+
+        function triggerNextEpisode() {
+            if (!globalEpisodes || globalEpisodes.length <= 1) return;
+            const currentIndex = globalEpisodes.findIndex(ep => ep.url === currentPlayingUrl);
+            if (currentIndex !== -1 && currentIndex < globalEpisodes.length - 1) {
+                const nextEp = globalEpisodes[currentIndex + 1];
+                showToast(`將於 2 秒後自動播放：${nextEp.name}`);
+                autoPlayTimer = setTimeout(() => {
+                    const btns = document.querySelectorAll('.ep-btn');
+                    if(btns[currentIndex + 1]) switchEpisode(nextEp.url, btns[currentIndex + 1], globalTitle, nextEp.name, globalPic, globalId);
+                    else loadM3u8(nextEp.url, globalTitle, nextEp.name, globalPic, globalId);
+                }, 2000);
+            }
+        }
+
+        videoPlayer.addEventListener('ended', () => { if (!isAutoPlaying) { isAutoPlaying = true; triggerNextEpisode(); } });
+
+        function closeModal() { modal.style.display = 'none'; videoPlayer.pause(); if (currentHls) { currentHls.destroy(); currentHls = null; } videoPlayer.removeAttribute('src'); videoPlayer.load(); currentPlayingId = null; }
+
+        // 5. 播放紀錄 (自動存檔與一鍵續播)
+        const HISTORY_KEY = 'ub_local_history';
+        function saveToHistory(id, name, pic, epName, url, progress = 0, catId = 0) {
+            let history = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+            history = history.filter(item => item.id !== id);
+            // 同步保存 catId 以便精準識別該影片應該去請求哪個 API 節點
+            history.unshift({ id, name, pic, epName: epName || '完整影片', url, progress, time: Date.now(), catId: catId || currentCategoryId }); 
+            if (history.length > 50) history.pop(); localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+        }
+
+        let lastSaveTime = 0;
+        videoPlayer.addEventListener('timeupdate', () => {
+            const now = Date.now();
+            if (now - lastSaveTime > 2000 && currentPlayingId && videoPlayer.currentTime > 0) {
+                lastSaveTime = now;
+                let history = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+                let index = history.findIndex(item => item.id === currentPlayingId && item.url === currentPlayingUrl);
+                if (index !== -1) { history[index].progress = videoPlayer.currentTime; localStorage.setItem(HISTORY_KEY, JSON.stringify(history)); }
+            }
+            if (videoPlayer.duration > 0 && videoPlayer.currentTime >= videoPlayer.duration - 0.5) {
+                if (!isAutoPlaying) { isAutoPlaying = true; triggerNextEpisode(); }
+            }
+        });
+
+        function showHistory() {
+            modal.style.display = 'flex'; document.getElementById('player-section').style.display = 'none'; document.getElementById('history-section').style.display = 'block';
+            const list = document.getElementById('history-list'); let history = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+            if (history.length === 0) { list.innerHTML = '<p style="text-align:center; padding: 20px;">暫無觀看紀錄。</p>'; return; }
+            list.innerHTML = '';
+            history.forEach(item => {
+                const div = document.createElement('div'); div.className = 'history-item';
+                const timeStr = item.progress > 0 ? ` (已觀看 ${formatTime(item.progress)})` : '';
+                div.innerHTML = `<img src="${item.pic}" onerror="this.src='https://via.placeholder.com/60x80?text=X'"><div class="history-info"><div><div style="font-size: 16px; font-weight: bold;">${item.name}</div><div class="history-ep">上次看到：${item.epName}${timeStr}</div></div><div style="font-size: 12px; color: #888;">觀看時間: ${new Date(item.time).toLocaleString()}</div></div>`;
+                div.onclick = async () => {
+                    document.getElementById('player-section').style.display = 'block'; document.getElementById('history-section').style.display = 'none';
+                    const epContainer = document.getElementById('episode-container');
+                    epContainer.innerHTML = '<div style="color:#aaa; font-size:14px; margin-top:10px;"><i class="fa-solid fa-spinner fa-spin"></i> 正在獲取完整集數...</div>';
+                    try {
+                        const baseUrl = getApiUrlByHistoryItem(item);
+                        const res = await fetch(`${baseUrl}?ac=detail&ids=${item.id}`);
+                        const data = await res.json();
+                        if (data && data.list && data.list.length > 0) {
+                            const movie = data.list[0];
+                            globalEpisodes = parseEpisodes(movie.vod_play_url);
+                            globalTitle = movie.vod_name; globalPic = movie.vod_pic; globalId = movie.vod_id;
+                            epContainer.innerHTML = '<div style="color:#5bc0de; font-size:14px; margin-bottom:10px;"><i class="fa-solid fa-circle-info"></i> 已從紀錄為您恢復播放。</div>';
+                            if (globalEpisodes.length > 1) {
+                                const grid = document.createElement('div'); grid.className = 'episode-grid';
+                                globalEpisodes.forEach((ep) => {
+                                    const btn = document.createElement('button'); 
+                                    btn.className = `ep-btn ${ep.url === item.url ? 'active' : ''}`; btn.innerText = ep.name;
+                                    btn.onclick = function() { switchEpisode(ep.url, this, globalTitle, ep.name, globalPic, globalId); };
+                                    grid.appendChild(btn);
+                                });
+                                epContainer.appendChild(grid);
+                            }
+                        }
+                    } catch(e) { console.error(e); }
+                    loadM3u8(item.url, item.name, item.epName, item.pic, item.id);
+                };
+                list.appendChild(div);
+            });
+        }
+
+        // ----------------------------------------------------
+        // 6. 快捷鍵與倍速/長按控制 (完美修復焦點衝突與原生框框)
+        // ----------------------------------------------------
+        const playerToast = document.getElementById('player-toast');
+        let toastTimeout, normalSpeed = 1.0, pressTimer, isLongPressing = false;
+        const lpToast = document.getElementById('long-press-toast'), speedBtnToggle = document.getElementById('current-speed-btn');
+
+        function showToast(message) { playerToast.innerText = message; playerToast.style.opacity = '1'; clearTimeout(toastTimeout); toastTimeout = setTimeout(() => playerToast.style.opacity = '0', 1500); }
+
+        // 消滅礙眼的點擊框框
+        videoPlayer.addEventListener('mouseup', () => { setTimeout(() => { videoPlayer.blur(); if (document.activeElement) document.activeElement.blur(); }, 100); });
+
+        // 終極攔截空白鍵 (使用 window + capture)
+        window.addEventListener('keydown', (e) => {
+            if (modal.style.display !== 'flex' || document.getElementById('player-section').style.display === 'none' || document.activeElement.tagName === 'INPUT') return;
+            
+            if (e.key === ' ' || e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+                e.preventDefault(); 
+                e.stopPropagation(); 
+                if (document.activeElement) document.activeElement.blur(); 
+            }
+
+            switch(e.key) {
+                case ']': if (videoPlayer.playbackRate < 3.0) { videoPlayer.playbackRate += 0.25; normalSpeed = videoPlayer.playbackRate; showToast(`加速: ${videoPlayer.playbackRate}x`); } break;
+                case '[': if (videoPlayer.playbackRate > 0.25) { videoPlayer.playbackRate -= 0.25; normalSpeed = videoPlayer.playbackRate; showToast(`減速: ${videoPlayer.playbackRate}x`); } break;
+                case '0': videoPlayer.playbackRate = 1.0; normalSpeed = 1.0; showToast(`正常速度: 1.0x`); break;
+                case 'ArrowRight': videoPlayer.currentTime += 10; showToast(`快轉 10 秒 ⏩`); break;
+                case 'ArrowLeft': videoPlayer.currentTime -= 10; showToast(`⏪ 倒退 10 秒`); break;
+                case ' ': 
+                    if (videoPlayer.paused) { videoPlayer.play(); showToast(`▶️ 播放`); } 
+                    else { videoPlayer.pause(); showToast(`⏸️ 暫停`); } 
+                    break;
+            }
+        }, { capture: true });
+
+        function changeSpeed(speed) { normalSpeed = speed; videoPlayer.playbackRate = speed; document.querySelectorAll('.speed-item').forEach(el => el.classList.remove('active')); if(event && event.target) event.target.classList.add('active'); speedBtnToggle.innerText = speed === 1.0 ? '倍速' : `${speed}X`; }
+        function startFastForward() { if (videoPlayer.paused) return; isLongPressing = true; videoPlayer.playbackRate = 3.0; lpToast.style.display = 'block'; }
+        function stopFastForward() { if (!isLongPressing) return; isLongPressing = false; videoPlayer.playbackRate = normalSpeed; lpToast.style.display = 'none'; }
+
+        videoPlayer.addEventListener('mousedown', (e) => { if (e.button === 0) pressTimer = setTimeout(startFastForward, 400); });
+        videoPlayer.addEventListener('mouseup', () => { clearTimeout(pressTimer); stopFastForward(); });
+        videoPlayer.addEventListener('mouseleave', () => { clearTimeout(pressTimer); stopFastForward(); });
+        videoPlayer.addEventListener('touchstart', (e) => { if (e.touches.length === 1) pressTimer = setTimeout(startFastForward, 400); });
+        videoPlayer.addEventListener('touchend', () => { clearTimeout(pressTimer); stopFastForward(); });
+
+        // 啟動第一頁載入
+        fetchMovies();
+    </script>
+</body>
+</html>
