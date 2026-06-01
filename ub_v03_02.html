@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>天天影視 - 智慧隨身版</title>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        :root { --primary-color: #141414; --header-bg: rgba(20, 20, 20, 0.9); --accent-color: #3b82f6; --card-bg: #222; --text-color: white; --card-hover-bg: #333; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--primary-color); color: var(--text-color); margin: 0; padding: 0; }
+        
+        header { background-color: var(--header-bg); padding: 15px 50px; display: flex; justify-content: space-between; align-items: center; position: fixed; top: 0; left: 0; width: 100%; z-index: 100; backdrop-filter: blur(10px); box-sizing: border-box; border-bottom: 1px solid #333; }
+        .logo { display: flex; align-items: center; color: #fff; font-size: 24px; text-decoration: none; font-weight: bold; }
+        .logo i { color: #5bc0de; margin-right: 10px; font-size: 28px; }
+        .nav-container { position: relative; margin-left: 20px; }
+        .nav-label { color: #fff; text-decoration: none; cursor: pointer; font-size: 18px; padding: 10px; }
+        .nav-label::after { content: '\f107'; font-family: 'Font Awesome 6 Free'; font-weight: 900; margin-left: 5px; font-size: 14px; }
+        .dropdown-content { display: none; position: absolute; top: 100%; left: 0; background-color: #1a1a1a; min-width: 780px; border-radius: 8px; box-shadow: 0px 8px 16px rgba(0,0,0,0.5); padding: 20px; z-index: 110; border: 1px solid #444; grid-template-columns: repeat(6, 1fr); gap: 20px; }
+        .nav-container:hover .dropdown-content { display: grid; }
+        .dropdown-col h4 { color: #5bc0de; margin-top: 0; margin-bottom: 10px; font-size: 16px; border-bottom: 1px solid #333; padding-bottom: 5px; }
+        .dropdown-item { color: #ccc; padding: 8px 0; text-decoration: none; display: block; cursor: pointer; font-size: 14px; transition: color 0.2s; }
+        .dropdown-item:hover { color: #fff; text-shadow: 0 0 5px rgba(255,255,255,0.5); }
+        
+        .header-right { display: flex; align-items: center; gap: 15px; }
+        .search-bar { position: relative; display: flex; align-items: center; background: #333; border-radius: 20px; padding: 5px 15px; width: 300px; }
+        .search-input { border: none; outline: none; background: transparent; font-size: 16px; padding: 5px; flex-grow: 1; color: #fff; }
+        .search-btn { background-color: var(--accent-color); color: white; border: none; border-radius: 20px; padding: 8px 15px; cursor: pointer; font-size: 14px; display: flex; align-items: center; z-index: 2; }
+        .search-dropdown { display: none; position: absolute; top: 100%; left: 0; width: 100%; background: #1a1a1a; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.8); padding: 15px; margin-top: 10px; z-index: 120; border: 1px solid #444; box-sizing: border-box; }
+        .search-section-title { color: #888; font-size: 12px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center; }
+        .clear-history { cursor: pointer; color: #5bc0de; font-size: 11px; }
+        .clear-history:hover { text-decoration: underline; }
+        .search-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+        .search-tag { background: #333; color: #ccc; padding: 5px 10px; border-radius: 15px; font-size: 13px; cursor: pointer; transition: 0.2s; border: 1px solid #444; }
+        .search-tag:hover { background: #5bc0de; color: #fff; border-color: #5bc0de; }
+        
+        .upload-btn { background-color: #22c55e; color: white; border: none; border-radius: 20px; padding: 8px 16px; cursor: pointer; font-size: 14px; display: none; align-items: center; gap: 6px; font-weight: bold; transition: 0.2s; }
+        .upload-btn:hover { background-color: #16a34a; }
+
+        #main-content { padding-top: 100px; padding-bottom: 50px; display: flex; flex-direction: column; align-items: center; }
+        .movie-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 20px; width: 95%; max-width: 1400px; }
+        .movie-card { background: var(--card-bg); padding: 10px; border-radius: 8px; text-align: center; cursor: pointer; transition: transform 0.2s; position: relative; border: 1px solid #333; overflow: hidden; }
+        .movie-card:hover { transform: scale(1.05); background: var(--card-hover-bg); z-index: 10; box-shadow: 0 10px 20px rgba(0,0,0,0.5); border-color: var(--accent-color); }
+        .movie-card img { width: 100%; height: 280px; object-fit: cover; border-radius: 4px; background: #111; }
+        .movie-card h3 { font-size: 15px; margin: 10px 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .card-remarks { font-size: 12px; color: #fff; position: absolute; top: 15px; right: 15px; background: rgba(229, 9, 20, 0.8); padding: 3px 6px; border-radius: 3px; font-weight: bold; z-index: 2; }
+        .card-info-sub { color: #aaa; font-size: 12px; margin-bottom: 5px; }
+
+        #loader-indicator { display: none; padding: 30px; text-align: center; font-size: 18px; color: #aaa; margin-top: 20px; width: 100%; }
+        #history-btn { position: fixed; bottom: 20px; right: 20px; background-color: #e50914; color: white; padding: 12px 20px; border-radius: 30px; cursor: pointer; box-shadow: 0 4px 15px rgba(229, 9, 20, 0.4); z-index: 90; font-weight: bold; }
+        
+        .modal { display: none; position: fixed; z-index: 200; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.95); justify-content: center; align-items: center; flex-direction: column; }
+        .modal-content { background-color: var(--primary-color); border-radius: 8px; max-width: 900px; width: 90%; padding: 20px; position: relative; text-align: center; border: 1px solid #333; }
+        .close-modal { position: absolute; top: 10px; right: 20px; color: #aaa; font-size: 30px; cursor: pointer; z-index: 300; }
+        .close-modal:hover { color: #fff; }
+        
+        #player-section { position: relative; }
+        video { width: 100%; max-height: 60vh; border-radius: 4px; background: #000; outline: none; }
+        
+        #episode-container { margin-top: 15px; text-align: left; }
+        .episode-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 10px; margin-top: 10px; max-height: 180px; overflow-y: auto; padding-right: 5px; }
+        .ep-btn { background-color: #333; color: white; border: 1px solid #555; padding: 8px 5px; border-radius: 4px; cursor: pointer; font-size: 14px; text-align: center; transition: 0.2s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .ep-btn:hover { background-color: #555; }
+        .ep-btn.active { background-color: var(--accent-color); border-color: var(--accent-color); color: white; font-weight: bold; }
+        
+        #history-list { text-align: left; max-height: 60vh; overflow-y: auto; padding-right: 10px; }
+        .history-item { display: flex; align-items: center; border-bottom: 1px solid #333; padding: 15px 10px; cursor: pointer; transition: background 0.2s; border-radius: 6px; justify-content: space-between; }
+        .history-item:hover { background-color: #333; }
+        .history-left { display: flex; align-items: center; }
+        .history-item img { width: 60px; height: 80px; object-fit: cover; border-radius: 4px; margin-right: 15px; }
+        .history-item .history-info { display: flex; flex-direction: column; justify-content: space-between; }
+        .history-ep { color: #5bc0de; font-size: 13px; font-weight: bold; margin-top: 5px; }
+        .history-time { color: #777; font-size: 12px; white-space: nowrap; padding-left: 10px; }
+        
+        #player-toast { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: rgba(0, 0, 0, 0.8); color: white; padding: 15px 30px; border-radius: 8px; font-size: 24px; font-weight: bold; pointer-events: none; opacity: 0; transition: opacity 0.3s ease; z-index: 300; }
+        #speed-control-wrapper { position: absolute; right: 20px; top: 50%; transform: translateY(-50%); z-index: 150; display: flex; flex-direction: column; align-items: center; }
+        .speed-menu { display: none; background: rgba(30, 30, 30, 0.6); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-radius: 12px; padding: 10px 0; margin-bottom: 10px; flex-direction: column; text-align: center; width: 80px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+        #speed-control-wrapper:hover .speed-menu { display: flex; animation: fadeIn 0.2s ease-in-out; }
+        .speed-item { padding: 10px; color: #ddd; cursor: pointer; font-size: 15px; transition: 0.2s; }
+        .speed-item:hover, .speed-item.active { color: white; background: rgba(255, 255, 255, 0.2); font-weight: bold; }
+        .speed-btn-toggle { background: rgba(0, 0, 0, 0.6); color: white; padding: 8px 15px; border-radius: 20px; cursor: pointer; font-size: 14px; border: 1px solid rgba(255,255,255,0.2); }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        #long-press-toast { position: absolute; top: 30px; left: 50%; transform: translateX(-50%); background: rgba(0, 0, 0, 0.7); color: white; padding: 8px 25px; border-radius: 30px; font-size: 16px; font-weight: bold; display: none; z-index: 200; pointer-events: none; }
+    </style>
+</head>
+<body>
+    <header>
+        <div style="display: flex; align-items: center;">
+            <a href="#" class="logo" onclick="fetchByCategory(5, '动作片'); return false;">
+                <i class="fa-solid fa-play"></i>天天影視
+            </a>
+            <nav class="nav-container">
+                <a class="nav-label">所有分類</a>
+                <div id="dynamic-nav" class="dropdown-content"></div>
+            </nav>
+        </div>
+        
+        <div class="header-right">
+            <button id="header-upload-btn" class="upload-btn"><i class="fa-solid fa-file-import"></i> 導入本地 TXT</button>
+            <input type="file" id="local-txt-input" accept=".txt" style="display:none;">
+
+            <div class="search-bar">
+                <input type="text" id="search-input" class="search-input" placeholder="請輸入影片名稱..." autocomplete="off">
+                <button id="search-btn" class="search-btn"><i class="fa-solid fa-search"></i>搜尋</button>
+                <div id="search-dropdown" class="search-dropdown">
+                    <div class="search-section-title">
+                        歷史搜尋 <span class="clear-history" onclick="clearSearchHistory()"><i class="fa-solid fa-trash-can"></i> 清除</span>
+                    </div>
+                    <div id="history-tags" class="search-tags"></div>
+                    <div class="search-section-title" style="margin-top:15px;">🔥 熱門搜尋</div>
+                    <div class="search-tags">
+                        <span class="search-tag" onclick="quickSearch('甄嬛传')">甄嬛传</span>
+                        <span class="search-tag" onclick="quickSearch('周星驰')">周星驰</span>
+                        <span class="search-tag" onclick="quickSearch('漫威')">漫威</span>
+                        <span class="search-tag" onclick="quickSearch('海贼王')">海贼王</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main id="main-content">
+        <h2 id="current-category-title" style="align-self: flex-start; margin-left: 2.5%; margin-bottom: 20px; border-left: 4px solid #5bc0de; padding-left: 10px;">动作片</h2>
+        <div id="movie-grid" class="movie-grid"></div>
+        <div id="loader-indicator"><i class="fa-solid fa-circle-notch fa-spin"></i> 正在載入下一頁...</div>
+    </main>
+
+    <div id="history-btn" onclick="showHistory()"><i class="fa-solid fa-clock-rotate-left"></i> 觀看紀錄</div>
+
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <span class="close-modal" onclick="closeModal()">&times;</span>
+            
+            <div id="player-section" style="display: none;">
+                <h2 id="now-playing-title" style="margin-top: 0; font-size: 20px;"></h2>
+                <video id="video-player" controls autoplay></video>
+                <div id="player-toast"></div>
+                <div id="long-press-toast">⏩ 3.0X 快速撥放中</div>
+                
+                <div id="speed-control-wrapper">
+                    <div class="speed-menu">
+                        <div class="speed-item" onclick="changeSpeed(3.0)">3.0X</div>
+                        <div class="speed-item" onclick="changeSpeed(2.0)">2.0X</div>
+                        <div class="speed-item" onclick="changeSpeed(1.5)">1.5X</div>
+                        <div class="speed-item" onclick="changeSpeed(1.25)">1.25X</div>
+                        <div class="speed-item active" onclick="changeSpeed(1.0)" id="speed-1-0">1.0X</div>
+                        <div class="speed-item" onclick="changeSpeed(0.8)">0.8X</div>
+                    </div>
+                    <div class="speed-btn-toggle" id="current-speed-btn">倍速</div>
+                </div>
+                <div id="episode-container"></div>
+            </div>
+            
+            <div id="history-section" style="display: none;">
+                <h2 style="margin-top: 0; border-bottom: 1px solid #333; padding-bottom: 10px; text-align: left;"><i class="fa-solid fa-clock-rotate-left"></i> 我的觀看紀錄</h2>
+                <div id="history-list"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==================== 分類與 API 設定 ====================
+        const categoryData = [
+            { groupName: "🎬 電影", items: [ {id: 5, name: "动作片"}, {id: 6, name: "喜剧片"}, {id: 7, name: "爱情片"}, {id: 8, name: "科幻片"}, {id: 9, name: "恐怖片"}, {id: 10, name: "剧情片"}, {id: 11, name: "战争片"}, {id: 20, name: "记录片"}, {id: 41, name: "动画片"} ] },
+            { groupName: "📺 劇集", items: [ {id: 12, name: "国产剧"}, {id: 13, name: "台湾剧"}, {id: 14, name: "韩国剧"}, {id: 15, name: "欧美剧"}, {id: 16, name: "香港剧"}, {id: 17, name: "泰国剧"}, {id: 18, name: "日本剧"}, {id: 54, name: "海外剧"} ] },
+            { groupName: "🎉 綜藝", items: [ {id: 62, name: "大陆综艺"}, {id: 63, name: "港台综艺"}, {id: 64, name: "日韩综艺"}, {id: 65, name: "欧美综艺"} ] },
+            { groupName: "👾 動漫", items: [ {id: 4, name: "动漫总汇"}, {id: 66, name: "国产动漫"}, {id: 67, name: "日韩动漫"}, {id: 68, name: "欧美动漫"}, {id: 69, name: "港台动漫"}, {id: 70, name: "海外动漫"} ] },
+            { groupName: "🔥 福利", items: [
+                {id: 19, name: "福利专区"}, {id: 61, name: "伦理片"},
+                {id: 93, name: "日本"}, {id: 94, name: "日本中文"},
+                {id: 95, name: "无码流出"}, {id: 96, name: "FC2"},
+                {id: 97, name: "HEYZO"}, {id: 98, name: "东京热"}, {id: 99, name: "一本道"}
+            ] },
+            { groupName: "📂 隨身櫃", items: [ {id: "custom_txt", name: "智慧填名牆"}, {id: "local_txt", name: "自訂本地 TXT"} ] }
+        ];
+
+        const API_LIST = [
+            { name: "主接口", api: "https://api.1080zyku.com/inc/apijson.php", ac: "videolist" },
+            { name: "福利接口", api: "https://ckbh1.xyz/api.php/provide/vod/", ac: "list" }
+        ];
+
+        const PLAYLIST_URL = "https://raw.githubusercontent.com/ddhola/file/refs/heads/main/play_list.txt";
+
+        // ==================== 全域變數 ====================
+        let currentPage = 1, currentCategoryId = 5, searchQuery = '', isLoading = false;
+        const movieGrid = document.getElementById('movie-grid');
+        const loaderIndicator = document.getElementById('loader-indicator');
+        const categoryTitle = document.getElementById('current-category-title');
+        const modal = document.getElementById('modal');
+        const videoPlayer = document.getElementById('video-player');
+        const headerUploadBtn = document.getElementById('header-upload-btn');
+        const localTxtInput = document.getElementById('local-txt-input');
+
+        let currentHls = null, currentPlayingId = null, currentPlayingUrl = null;
+        let globalEpisodes = [], globalTitle = '', globalPic = '', globalId = '', globalApiSource = '';
+
+        let txtTitles = [];
+        const txtBatchSize = 20;
+
+        const HISTORY_KEY = 'ub_local_history';
+        const SEARCH_HISTORY_KEY = 'ub_search_history';
+
+        // ==================== 工具函數 ====================
+        function getApiConfig(catId) {
+            const id = parseInt(catId);
+            return (id >= 93 && id <= 99) ? API_LIST[1] : API_LIST[0];
+        }
+
+        function parseEpisodes(playUrlStr) {
+            if (!playUrlStr) return [];
+            const sourceStr = playUrlStr.split('$$$')[0];
+            return sourceStr.split('#').map(ep => {
+                const parts = ep.split('$');
+                return parts.length >= 2 && parts[1].includes('.m3u8') 
+                    ? { name: parts[0], url: parts[1] } 
+                    : null;
+            }).filter(Boolean);
+        }
+
+        const complexChars = "動作片喜劇片愛情片科幻片恐怖片劇情片戰爭片記錄片動畫片國產劇台灣劇韓國劇歐美劇香港劇泰國劇日本劇海外劇大陸綜藝港台綜藝日韓綜藝歐美綜藝動漫總匯國產動漫日韓動漫歐美動漫港台動漫海外動漫福利專區倫理片日本中文無碼流出東京熱一本道甄嬛傳周星馳漫威海賊王";
+        const simpleChars = "动作片喜剧片爱情片科幻片恐怖片剧情片战争片记录片动画片国产剧台湾剧韩国剧欧美剧香港剧泰国剧日本剧海外剧大陆综艺港台综艺日韩综艺欧美综艺动漫总汇国产动漫日韩动漫欧美动漫港台动漫海外动漫福利专区伦理片日本中文无码流出东京热一本道甄嬛传周星馳漫威海贼王";
+
+        function toSimple(str) {
+            let res = "";
+            for (let i = 0; i < str.length; i++) {
+                const idx = complexChars.indexOf(str[i]);
+                res += idx !== -1 ? simpleChars[idx] : str[i];
+            }
+            return res;
+        }
+
+        function advancedSearchFilter(vodName, keyword) {
+            if (!vodName || !keyword) return false;
+            const name = vodName.toLowerCase();
+            const key = keyword.toLowerCase().trim();
+            const nameSimple = toSimple(name);
+            const keySimple = toSimple(key);
+
+            if (name.startsWith(key) || nameSimple.startsWith(keySimple)) return true;
+            if (name.includes(key) || nameSimple.includes(keySimple)) return true;
+
+            return false;
+        }
+
+        async function fetchWithTimeout(url, timeout = 2500) {
+            const controller = new AbortController();
+            setTimeout(() => controller.abort(), timeout);
+            const res = await fetch(url, { signal: controller.signal });
+            return res;
+        }
+
+        function formatTime(timestamp) {
+            if (!timestamp) return "";
+            const d = new Date(timestamp);
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const dd = String(d.getDate()).padStart(2, '0');
+            const hh = String(d.getHours()).padStart(2, '0');
+            const min = String(d.getMinutes()).padStart(2, '0');
+            return `${yyyy}/${mm}/${dd} ${hh}:${min}`;
+        }
+
+        // ==================== 主要獲取函數 ====================
+        async function fetchMovies(replaceGrid = false) {
+            if (isLoading) return;
+            isLoading = true;
+            if (replaceGrid) movieGrid.innerHTML = '';
+            loaderIndicator.style.display = 'block';
+
+            let mergedList = [];
+
+            try {
+                if (currentCategoryId === "custom_txt" || currentCategoryId === "local_txt") {
+                    if (currentPage === 1 && txtTitles.length === 0) {
+                        if (currentCategoryId === "custom_txt") {
+                            try {
+                                const res = await fetch(PLAYLIST_URL);
+                                const text = await res.text();
+                                txtTitles = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 1);
+                            } catch (err) {
+                                categoryTitle.innerText = "預設片單載入失敗";
+                            }
+                        }
+                    }
+
+                    const startIndex = (currentPage - 1) * txtBatchSize;
+                    const endIndex = Math.min(startIndex + txtBatchSize, txtTitles.length);
+                    const currentBatch = txtTitles.slice(startIndex, endIndex);
+
+                    if (currentBatch.length > 0) {
+                        const promises = currentBatch.map(async (title) => {
+                            try {
+                                let res = await fetchWithTimeout(`${API_LIST[0].api}?ac=list&wd=${encodeURIComponent(title)}&limit=1`, 3000);
+                                let data = await res.json();
+                                if (data.code === 1 && data.list?.length > 0) {
+                                    let movie = data.list[0];
+                                    if (!movie.vod_pic) {
+                                        let detailRes = await fetchWithTimeout(`${API_LIST[0].api}?ac=detail&ids=${movie.vod_id}`, 2000);
+                                        let detailData = await detailRes.json();
+                                        if (detailData.code === 1 && detailData.list?.[0]) {
+                                            movie = detailData.list[0];
+                                        }
+                                    }
+                                    return movie;
+                                }
+                                return { vod_id: "fake_" + title, vod_name: title, vod_remarks: "未知", vod_pic: "", vod_year: "未知" };
+                            } catch (e) {
+                                return { vod_id: "fake_" + title, vod_name: title, vod_remarks: "超時", vod_pic: "", vod_year: "未知" };
+                            }
+                        });
+
+                        mergedList = await Promise.all(promises);
+                    }
+
+                } else if (currentCategoryId !== 0) {
+                    const site = getApiConfig(currentCategoryId);
+                    const url = `${site.api}?ac=${site.ac}&pg=${currentPage}&t=${currentCategoryId}`;
+                    const res = await fetchWithTimeout(url);
+                    const data = await res.json();
+                    if (data?.list) mergedList = data.list;
+                } else {
+                    const tasks = API_LIST.map(site => 
+                        fetchWithTimeout(`${site.api}?ac=${site.ac}&pg=${currentPage}&wd=${encodeURIComponent(searchQuery)}`)
+                            .then(res => res.json())
+                            .then(data => {
+                                if (data?.list) {
+                                    const filtered = data.list.filter(m => advancedSearchFilter(m.vod_name, searchQuery));
+                                    filtered.forEach(m => {
+                                        if (!mergedList.some(ex => ex.vod_id === m.vod_id)) {
+                                            mergedList.push({ ...m, _baseUrl: site.api });
+                                        }
+                                    });
+                                }
+                            })
+                            .catch(() => {})
+                    );
+                    await Promise.all(tasks);
+                }
+
+                renderListToGrid(mergedList);
+                
+                if (currentCategoryId === "custom_txt" || currentCategoryId === "local_txt") {
+                    categoryTitle.innerText = `${currentCategoryId === "custom_txt" ? "智慧填名牆" : "自訂本地清單"} (已顯示 ${movieGrid.children.length} / ${txtTitles.length} 部)`;
+                }
+
+            } catch (e) {
+                console.error(e);
+            }
+
+            isLoading = false;
+            loaderIndicator.style.display = 'none';
+        }
+
+        function renderListToGrid(list) {
+            if (list.length === 0 && currentPage === 1) {
+                movieGrid.innerHTML = '<p style="text-align:center; grid-column:1/-1; padding:40px; font-size:18px;">找不到相關結果。</p>';
+                return;
+            }
+
+            list.forEach(movie => {
+                if (document.getElementById(`movie-card-${movie.vod_id}`)) return;
+
+                const baseUrl = movie._baseUrl || API_LIST[0].api;
+                const card = document.createElement('div');
+                card.className = 'movie-card';
+                card.id = `movie-card-${movie.vod_id}`;
+                
+                const imgTag = movie.vod_pic 
+                    ? `<img src="${movie.vod_pic}" onerror="this.src='https://via.placeholder.com/200x280?text=No+Image'">`
+                    : `<div style="height:280px; background:#1a1a1a; display:flex; flex-direction:column; align-items:center; justify-content:center; color:#555; font-size:40px;">
+                        <i class="fa-solid fa-clapperboard"></i>
+                        <div style="font-size:11px; padding:10px; color:#666; word-break:break-all;">${movie.vod_name}</div>
+                       </div>`;
+
+                card.innerHTML = `
+                    <span class="card-remarks">${movie.vod_remarks || '高清'}</span>
+                    ${imgTag}
+                    <h3>${movie.vod_name}</h3>
+                    <div class="card-info-sub">${movie.vod_year ? movie.vod_year + ' • ' : ''}${movie.type_name || '影片'}</div>
+                `;
+
+                card.onclick = async () => {
+                    if (String(movie.vod_id).startsWith("fake_")) {
+                        alert(`「${movie.vod_name}」在當前影音接口中找不到匹配的播放資源。`);
+                        return;
+                    }
+                    
+                    let episodes = parseEpisodes(movie.vod_play_url);
+                    if (episodes.length === 0) {
+                        try {
+                            let res = await fetchWithTimeout(`${baseUrl}?ac=detail&ids=${movie.vod_id}`, 3000);
+                            let data = await res.json();
+                            if (data.list?.[0]) {
+                                episodes = parseEpisodes(data.list[0].vod_play_url);
+                            }
+                        } catch(e){}
+                    }
+                    
+                    if (episodes.length === 0) {
+                        alert("無法解析該影片的播放連結。");
+                        return;
+                    }
+                    playVideo(episodes, movie.vod_name, movie.vod_pic, movie.vod_id, baseUrl);
+                };
+
+                movieGrid.appendChild(card);
+            });
+        }
+
+        // ==================== 選單與搜尋 ====================
+        function renderMenu() {
+            const nav = document.getElementById('dynamic-nav');
+            categoryData.forEach(group => {
+                const col = document.createElement('div');
+                col.className = 'dropdown-col';
+                let html = `<h4>${group.groupName}</h4>`;
+                group.items.forEach(item => html += `<a class="dropdown-item" onclick="fetchByCategory('${item.id}', '${item.name}')">${item.name}</a>`);
+                col.innerHTML = html;
+                nav.appendChild(col);
+            });
+        }
+
+        function fetchByCategory(id, name) {
+            currentCategoryId = id;
+            searchQuery = '';
+            currentPage = 1;
+            categoryTitle.innerText = name;
+            
+            if (id === 'local_txt') {
+                headerUploadBtn.style.display = 'flex';
+            } else {
+                headerUploadBtn.style.display = 'none';
+            }
+
+            if (id !== 'custom_txt' && id !== 'local_txt') {
+                txtTitles = [];
+            } else if (id === 'custom_txt') {
+                txtTitles = []; 
+            }
+
+            fetchMovies(true);
+        }
+
+        function performSearch() {
+            const query = document.getElementById('search-input').value.trim();
+            if (!query) return;
+            
+            searchQuery = query;
+            currentCategoryId = 0;
+            currentPage = 1;
+            categoryTitle.innerText = `搜尋結果: "${query}"`;
+            headerUploadBtn.style.display = 'none';
+            
+            saveSearchHistory(query);
+            document.getElementById('search-dropdown').style.display = 'none';
+            
+            fetchMovies(true);
+        }
+
+        function renderSearchHistory() {
+            let history = JSON.parse(localStorage.getItem(SEARCH_HISTORY_KEY) || '[]');
+            const container = document.getElementById('history-tags');
+            container.innerHTML = '';
+            history.forEach(k => {
+                const span = document.createElement('span');
+                span.className = 'search-tag';
+                span.textContent = k;
+                span.onclick = () => quickSearch(k);
+                container.appendChild(span);
+            });
+        }
+
+        function saveSearchHistory(keyword) {
+            let history = JSON.parse(localStorage.getItem(SEARCH_HISTORY_KEY) || '[]');
+            history = history.filter(k => k !== keyword);
+            history.unshift(keyword);
+            if (history.length > 8) history.pop();
+            localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(history));
+        }
+
+        function clearSearchHistory() {
+            localStorage.removeItem(SEARCH_HISTORY_KEY);
+            renderSearchHistory();
+        }
+
+        function quickSearch(keyword) {
+            document.getElementById('search-input').value = keyword;
+            performSearch();
+        }
+
+        // ==================== 播放器功能 ====================
+        function playVideo(episodes, title, pic, id, apiSource) {
+            globalEpisodes = episodes;
+            globalTitle = title;
+            globalPic = pic;
+            globalId = id;
+            globalApiSource = apiSource;
+
+            modal.style.display = 'flex';
+            document.getElementById('player-section').style.display = 'block';
+            document.getElementById('history-section').style.display = 'none';
+
+            const epContainer = document.getElementById('episode-container');
+            epContainer.innerHTML = '';
+
+            // 尋找此影片在本地歷史紀錄中儲存的最後播放 URL
+            let history = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+            let matchedRecord = history.find(item => item.id === id);
+            let targetUrl = episodes[0].url;
+            let targetEpName = episodes[0].name;
+            let targetIndex = 0;
+
+            if (matchedRecord) {
+                // 如果歷史紀錄有儲存特定的單集 URL，則定位到該集
+                let foundIdx = episodes.findIndex(ep => ep.url === matchedRecord.url);
+                if (foundIdx !== -1) {
+                    targetUrl = episodes[foundIdx].url;
+                    targetEpName = episodes[foundIdx].name;
+                    targetIndex = foundIdx;
+                }
+            }
+
+            if (episodes.length > 1) {
+                const label = document.createElement('div');
+                label.style = "font-size:16px; margin-bottom:8px;";
+                label.textContent = `選集 (${episodes.length}集)`;
+                epContainer.appendChild(label);
+
+                const grid = document.createElement('div');
+                grid.className = 'episode-grid';
+                episodes.forEach((ep, i) => {
+                    const btn = document.createElement('button');
+                    btn.className = `ep-btn ${i === targetIndex ? 'active' : ''}`;
+                    btn.textContent = ep.name;
+                    btn.onclick = () => switchEpisode(ep.url, btn, title, ep.name, pic, id);
+                    grid.appendChild(btn);
+                });
+                epContainer.appendChild(grid);
+            }
+
+            loadM3u8(targetUrl, title, targetEpName, pic, id);
+        }
+
+        function switchEpisode(url, btn, title, epName, pic, id) {
+            document.querySelectorAll('.ep-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            loadM3u8(url, title, epName, pic, id);
+        }
+
+        function loadM3u8(m3u8Url, title, epName, pic, id) {
+            document.getElementById('now-playing-title').innerHTML = epName ? `${title} - <span style="color:#5bc0de">${epName}</span>` : title;
+            currentPlayingId = id;
+            currentPlayingUrl = m3u8Url;
+
+            // 讀取該集是否有歷史進度
+            let history = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+            let matchedRecord = history.find(item => item.id === id && item.url === m3u8Url);
+            let savedProgress = matchedRecord ? matchedRecord.progress : 0;
+
+            // 初始化時先存一次（確保進度存在）
+            saveToHistory(id, title, pic, epName, m3u8Url, savedProgress, globalApiSource);
+
+            if (currentHls) currentHls.destroy();
+
+            // 監聽載入完成後跳轉進度
+            const onLoadedMetadata = () => {
+                if (savedProgress > 0) {
+                    videoPlayer.currentTime = savedProgress;
+                }
+                videoPlayer.removeEventListener('loadedmetadata', onLoadedMetadata);
+            };
+            videoPlayer.addEventListener('loadedmetadata', onLoadedMetadata);
+
+            if (Hls.isSupported()) {
+                currentHls = new Hls();
+                currentHls.loadSource(m3u8Url);
+                currentHls.attachMedia(videoPlayer);
+            } else {
+                videoPlayer.src = m3u8Url;
+            }
+        }
+
+        // 動態定時與事件同步更新觀看進度
+        function saveToHistory(id, name, pic, epName, url, progress, apiSource) {
+            let history = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+            history = history.filter(item => item.id !== id);
+            history.unshift({ id, name, pic, epName: epName || '完整影片', url, progress: Math.floor(progress), time: Date.now(), apiSource });
+            if (history.length > 50) history.pop();
+            localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+        }
+
+        // 監聽播放器時間變化，隨時寫入快取防止進度丟失
+        videoPlayer.addEventListener('timeupdate', () => {
+            if (!currentPlayingId || videoPlayer.currentTime === 0) return;
+            let history = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+            let matched = history.find(item => item.id === currentPlayingId);
+            if (matched) {
+                matched.progress = Math.floor(videoPlayer.currentTime);
+                matched.time = Date.now(); // 同步更新最後觀看時間
+                localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+            }
+        });
+
+        function showHistory() {
+            modal.style.display = 'flex';
+            document.getElementById('player-section').style.display = 'none';
+            document.getElementById('history-section').style.display = 'block';
+
+            const listEl = document.getElementById('history-list');
+            let history = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
+            listEl.innerHTML = '';
+
+            if (history.length === 0) {
+                listEl.innerHTML = '<p style="text-align:center; padding:30px;">暫無觀看紀錄</p>';
+                return;
+            }
+
+            history.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'history-item';
+                
+                // 格式化顯示進度條或分鐘
+                let progressMinutes = Math.floor(item.progress / 60);
+                let progressSeconds = String(item.progress % 60).padStart(2, '0');
+                let progressText = item.progress > 0 ? `看到 ${progressMinutes}分${progressSeconds}秒` : '剛開始看';
+
+                div.innerHTML = `
+                    <div class="history-left">
+                        <img src="${item.pic}" onerror="this.src='https://via.placeholder.com/66x80?text=X'">
+                        <div class="history-info">
+                            <div style="font-weight:bold;">${item.name}</div>
+                            <div class="history-ep">上次看到：${item.epName} <span style="color:#aaa; font-weight:normal; font-size:12px; margin-left:8px;">(${progressText})</span></div>
+                        </div>
+                    </div>
+                    <div class="history-time">${formatTime(item.time)}</div>
+                `;
+                div.onclick = () => {
+                    document.getElementById('player-section').style.display = 'block';
+                    document.getElementById('history-section').style.display = 'none';
+                    loadM3u8(item.url, item.name, item.epName, item.pic, item.id);
+                };
+                listEl.appendChild(div);
+            });
+        }
+
+        function closeModal() {
+            modal.style.display = 'none';
+            videoPlayer.pause();
+            if (currentHls) currentHls.destroy();
+            currentHls = null;
+        }
+
+        function changeSpeed(speed) {
+            videoPlayer.playbackRate = speed;
+            document.querySelectorAll('.speed-item').forEach(el => el.classList.remove('active'));
+            document.getElementById('current-speed-btn').textContent = speed === 1 ? '倍速' : speed + 'X';
+        }
+
+        // ==================== 滾動與頁面控制監聽 ====================
+        window.addEventListener('scroll', () => {
+            if (isLoading) return;
+
+            if ((window.innerHeight + window.scrollY) >= (document.documentElement.scrollHeight - 250)) {
+                if (currentCategoryId === "custom_txt" || currentCategoryId === "local_txt") {
+                    if (currentPage * txtBatchSize >= txtTitles.length) return; 
+                } else if (currentCategoryId === 0) {
+                    return; 
+                }
+
+                currentPage++;
+                fetchMovies(false); 
+            }
+        });
+
+        headerUploadBtn.addEventListener('click', () => localTxtInput.click());
+        localTxtInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async () => {
+                txtTitles = reader.result.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 1);
+                currentPage = 1;
+                movieGrid.innerHTML = '';
+                fetchMovies(true);
+            };
+            reader.readAsText(file);
+        });
+
+        document.addEventListener('click', (e) => {
+            const searchBar = document.querySelector('.search-bar');
+            if (searchBar && !searchBar.contains(e.target)) {
+                document.getElementById('search-dropdown').style.display = 'none';
+            }
+        });
+
+        window.addEventListener('keydown', e => {
+            if (modal.style.display !== 'flex' || document.getElementById('player-section').style.display === 'none') return;
+            if (e.key === 'ArrowRight') videoPlayer.currentTime += 10;
+            if (e.key === 'ArrowLeft') videoPlayer.currentTime -= 10;
+            if (e.key === ' ') {
+                e.preventDefault();
+                videoPlayer.paused ? videoPlayer.play() : videoPlayer.pause();
+            }
+        });
+
+        // 事件綁定
+        document.getElementById('search-btn').onclick = performSearch;
+        document.getElementById('search-input').addEventListener('keypress', e => { if(e.key === 'Enter') performSearch(); });
+        document.getElementById('search-input').addEventListener('focus', () => { 
+            renderSearchHistory(); 
+            document.getElementById('search-dropdown').style.display = 'block'; 
+        });
+
+        // 初始化
+        renderMenu();
+        fetchMovies();
+    </script>
+</body>
+</html>
