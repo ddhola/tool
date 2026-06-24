@@ -14,6 +14,7 @@ CLASSICA 古典樂
 CN卡通
 DAZN
 DMAX
+DISCOVERY
 DreamWorks
 ELEVEN
 ELTA
@@ -301,6 +302,7 @@ DMAX
 求索
 動物
 DISCOVERY
+Discovery
 iscovery
 arth
 nature
