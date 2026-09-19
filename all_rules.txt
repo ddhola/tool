@@ -5,6 +5,8 @@ ARIRANG
 Arirang TV
 AXN
 BBC EARTH
+bbeeaeth
+earth
 BBC Lifestyle
 CATCHPLAY
 CHC
@@ -86,6 +88,7 @@ Z頻道
 飛碟電臺
 高點
 動物星球
+運動
 國會
 國興
 採昌
@@ -304,6 +307,8 @@ DMAX
 DISCOVERY
 Discovery
 iscovery
+bbcearth
+earth
 arth
 nature
 滾動力
