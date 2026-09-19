@@ -27,6 +27,7 @@ Eye戲劇
 Focus風采
 Focus歡樂
 fun探索娛樂臺
+Hami
 HBO
 History
 HITS
@@ -133,6 +134,7 @@ Jstar
 潘多拉
 潘朵啦
 LOOK
+MOMO綜合
 
 [CATEGORY_LIST]
 新聞臺,#genre#
@@ -175,7 +177,8 @@ MoMo 綜合臺
 Mo MO 綜合臺
 momo 綜合臺
 MOMO 綜合臺
-
+Hami
+MOMO綜合
 
 四臺,#genre#
 華視
