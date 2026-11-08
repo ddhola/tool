@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>小遊戲收藏盒</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@900&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f3ead6;--ink:#2a2235;--pn:#fff8e8;--ln:#d9c9a3;--ac:#2f7d6d;--rd:#c8402c;--gd:#e8a93a;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1a1830;--ink:#f3e9d2;--pn:#262344;--ln:#3a3660;--ac:#4fb59f;--rd:#d9432f;--gd:#f2b84b}}
+:root[data-theme="dark"]{--bg:#1a1830;--ink:#f3e9d2;--pn:#262344;--ln:#3a3660;--ac:#4fb59f;--rd:#d9432f;--gd:#f2b84b}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;display:flex;justify-content:center;min-height:100vh}
+main{width:100%;max-width:480px;padding:20px 16px 32px}
+h1{font-family:"Noto Serif TC","Songti TC",serif;font-weight:900;font-size:1.9rem;margin:0 0 4px;letter-spacing:.06em}
+p{margin:0 0 16px;opacity:.75}
+button{font:inherit;color:inherit;cursor:pointer}
+.menu{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.menu button{background:var(--pn);border:2px solid var(--ln);border-radius:14px;padding:18px 8px;font-weight:600;font-size:1rem}
+.menu span{display:block;font-size:2.2rem;margin-bottom:6px}
+.top{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.top button{border:2px solid var(--ln);background:var(--pn);border-radius:10px;padding:8px 12px}
+.top h2{flex:1;margin:0;font-family:"Noto Serif TC",serif;font-size:1.3rem}
+.st{display:flex;gap:10px;margin-bottom:12px}
+.st div{flex:1;background:var(--pn);border:2px solid var(--ln);border-radius:10px;padding:6px 12px;font-size:.75rem}
+.st b{display:block;font-size:1.2rem}
+#stage{position:relative;touch-action:none;user-select:none;-webkit-user-select:none}
+.grid{display:grid;gap:8px}
+.tile{aspect-ratio:1;background:var(--rd);border:2px solid var(--ln);border-radius:10px;font-size:clamp(1.6rem,9vw,2.4rem);padding:0;display:flex;align-items:center;justify-content:center;color:var(--ink)}
+.tile.on{background:var(--pn)}
+.n{background:var(--pn);font-weight:900;font-size:clamp(1.2rem,7vw,1.8rem);color:#2a2235}
+.grid .n:empty{color:var(--ink)}
+canvas{width:100%;display:block;border:2px solid var(--ln);border-radius:10px}
+.big{width:100%;height:55vh;border:0;border-radius:14px;background:var(--pn);font-size:1.3rem;font-weight:600}
+.win{position:absolute;left:8%;right:8%;top:35%;background:var(--gd);color:#2a2235;border-radius:14px;padding:16px;text-align:center;box-shadow:0 6px 24px rgba(0,0,0,.35)}
+.win button{margin-top:10px;background:#2a2235;color:#fff;border:0;border-radius:10px;padding:10px 20px}
+#hint{margin-top:12px;font-size:.9rem}
+.sm{font-size:1.1rem;font-weight:600}
+.mode{width:100%;margin-bottom:8px;padding:10px;border:2px solid var(--ln);background:var(--pn);border-radius:10px}
+.sd{grid-template-columns:repeat(9,1fr);gap:0;border:2px solid var(--ink)}
+.sd button{aspect-ratio:1;min-width:0;border:1px solid var(--ln);background:var(--pn);font-size:1.15rem;padding:0;color:var(--ac)}
+.sd .g{color:var(--ink);font-weight:900}
+.sd .s{background:var(--gd);color:#2a2235}
+.sd .x{color:var(--rd)}
+.pad{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:10px}
+.pad button{padding:12px 0;background:var(--pn);border:2px solid var(--ln);border-radius:10px;font-size:1.2rem;font-weight:600}
+.cell{aspect-ratio:1;border:2px solid var(--ln);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:1.6rem;font-weight:900;background:var(--pn)}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+ <section id="hub">
+  <h1>小遊戲收藏盒</h1>
+  <p>選一個遊戲開始，最佳紀錄會存在這支手機上。</p>
+  <div class="menu" id="menu"></div>
+ </section>
+ <section id="game" hidden>
+  <div class="top"><button id="back">‹ 返回</button><h2 id="gt"></h2><button id="rs">重來</button></div>
+  <div class="st"><div>分數<b id="sc">0</b></div><div>最佳<b id="bs">–</b></div></div>
+  <div id="stage"></div>
+  <p id="hint"></p>
+ </section>
+</main>
+<script>
+(function(){
+var $=function(s){return document.querySelector(s)},stage=$("#stage"),cur,stop,onDir;
+var E=["🧋","🥟","🍍","🍚","🥙","🍧","🍢","🍤"];
+function shuf(a){a=a.slice();for(var i=a.length-1;i>0;i--){var j=Math.random()*(i+1)|0,t=a[i];a[i]=a[j];a[j]=t}return a}
+function best(id,v,low){var k="gb-"+id,o=null;try{o=localStorage.getItem(k)}catch(e){}o=o===null?null:+o;
+ if(v!=null&&(o===null||(low?v<o:v>o))){o=v;try{localStorage.setItem(k,v)}catch(e){}}return o}
+function setS(v){$("#sc").textContent=v}
+function rec(v){var b=best(cur.id,v,cur.low);$("#bs").textContent=b===null?"–":b}
+function toast(m){var d=document.createElement("div");d.className="win";d.innerHTML="<b>"+m+"</b><br><button>再玩一次</button>";d.lastChild.onclick=function(){open(cur)};stage.appendChild(d)}
+function open(g){if(stop)stop();cur=g;$("#hub").hidden=true;$("#game").hidden=false;$("#gt").textContent=g.n;$("#hint").textContent=g.h;
+ stage.innerHTML="";setS(0);var b=best(g.id,null,g.low);$("#bs").textContent=b===null?"–":b;onDir=null;stop=g.run()}
+function close(){if(stop)stop();stop=null;onDir=null;$("#game").hidden=true;$("#hub").hidden=false}
+var sx,sy;
+stage.addEventListener("touchstart",function(e){sx=e.touches[0].clientX;sy=e.touches[0].clientY},{passive:true});
+stage.addEventListener("touchend",function(e){var dx=e.changedTouches[0].clientX-sx,dy=e.changedTouches[0].clientY-sy;
+ if(Math.max(Math.abs(dx),Math.abs(dy))<24||!onDir)return;onDir(Math.abs(dx)>Math.abs(dy)?(dx>0?"R":"L"):(dy>0?"D":"U"))},{passive:true});
+document.addEventListener("keydown",function(e){var k={ArrowLeft:"L",ArrowRight:"R",ArrowUp:"U",ArrowDown:"D"}[e.key];if(k&&onDir){e.preventDefault();onDir(k)}});
+
+function memory(){
+ var f=null,lk=false,m=0,ok=0;stage.innerHTML='<div class="grid" style="grid-template-columns:repeat(4,1fr)"></div>';
+ var g=stage.firstChild;
+ shuf(E.concat(E)).forEach(function(e){var b=document.createElement("button");b.className="tile";
+  b.onclick=function(){if(lk||b.classList.contains("on"))return;b.classList.add("on");b.textContent=e;
+   if(!f){f=b;return}
+   m++;setS(m);var a=f;f=null;
+   if(a.textContent===e){if(++ok===8){rec(m);toast("完成！共 "+m+" 步")}}
+   else{lk=true;setTimeout(function(){a.classList.remove("on");b.classList.remove("on");a.textContent=b.textContent="";lk=false},700)}};
+  g.appendChild(b)});
+}
+function mole(){
+ stage.innerHTML='<div class="grid" style="grid-template-columns:repeat(3,1fr)"></div>';var g=stage.firstChild,h=[],up=-1,sc=0,left=30,t1,t2,hint=$("#hint");
+ for(var i=0;i<9;i++)(function(i){var b=document.createElement("button");b.className="tile";
+  b.onclick=function(){if(up===i){sc++;setS(sc);rec(sc);b.textContent="💥";up=-1}};h.push(b);g.appendChild(b)})(i);
+ t1=setInterval(function(){h.forEach(function(x){x.textContent=""});up=Math.random()*9|0;h[up].textContent="🐹"},750);
+ t2=setInterval(function(){left--;hint.textContent="剩 "+left+" 秒";
+  if(left<=0){clearInterval(t1);clearInterval(t2);h.forEach(function(x){x.textContent=""});toast("時間到，打中 "+sc+" 隻")}},1000);
+ hint.textContent="剩 30 秒";
+ return function(){clearInterval(t1);clearInterval(t2)};
+}
+function mines(){
+ var W=9,N=81,M=10,mine=[],op=[],fl=[],num=[],flag=false,over=false,first=true,left=M,t0,cells=[];
+ stage.innerHTML='<button class="mode">⛏ 挖開</button><div class="grid" style="grid-template-columns:repeat(9,1fr);gap:3px"></div>';
+ var mb=stage.firstChild,g=stage.lastChild;setS(left);
+ mb.onclick=function(){flag=!flag;mb.textContent=flag?"🚩 插旗":"⛏ 挖開"};
+ function nb(i){var r=i/W|0,c=i%W,o=[];for(var a=-1;a<2;a++)for(var b=-1;b<2;b++){var y=r+a,x=c+b;if((a||b)&&y>=0&&y<W&&x>=0&&x<W)o.push(y*W+x)}return o}
+ function place(s){var k=0;while(k<M){var p=Math.random()*N|0;if(p!==s&&!mine[p]){mine[p]=1;k++}}for(var i=0;i<N;i++)num[i]=nb(i).filter(function(j){return mine[j]}).length}
+ function show(i){var b=cells[i];b.classList.toggle("on",!!op[i]);b.textContent=op[i]?(mine[i]?"💣":(num[i]||"")):(fl[i]?"🚩":"")}
+ function reveal(i){if(op[i]||fl[i])return;op[i]=1;show(i);if(!num[i]&&!mine[i])nb(i).forEach(reveal)}
+ function tap(i){if(over)return;
+  if(flag){if(!op[i]){fl[i]=!fl[i];left+=fl[i]?-1:1;setS(left);show(i)}return}
+  if(fl[i]||op[i])return;
+  if(first){first=false;t0=Date.now();place(i)}
+  if(mine[i]){over=true;for(var j=0;j<N;j++)if(mine[j]){op[j]=1;show(j)}toast("踩到地雷了");return}
+  reveal(i);if(op.filter(Boolean).length===N-M){over=true;var s=Math.round((Date.now()-t0)/1000);setS(s);rec(s);toast("排雷成功！用時 "+s+" 秒")}}
+ for(var i=0;i<N;i++)(function(i){var b=document.createElement("button");b.className="tile sm";b.onclick=function(){tap(i)};cells.push(b);g.appendChild(b)})(i);
+}
+function sdOk(b,i,v){var r=i/9|0,c=i%9;for(var k=0;k<9;k++)if(b[r*9+k]===v||b[k*9+c]===v)return false;var br=r-r%3,bc=c-c%3;for(var a=0;a<3;a++)for(var d=0;d<3;d++)if(b[(br+a)*9+bc+d]===v)return false;return true}
+function sdSolve(b){var i=b.indexOf(0);if(i<0)return true;var ns=shuf([1,2,3,4,5,6,7,8,9]);for(var k=0;k<9;k++){if(sdOk(b,i,ns[k])){b[i]=ns[k];if(sdSolve(b))return true;b[i]=0}}return false}
+function sudoku(){
+ var p=Array(81).fill(0),gv=[],sel=-1,t0=Date.now(),done=false;sdSolve(p);
+ shuf([...Array(81).keys()]).slice(0,42).forEach(function(i){p[i]=0});
+ p.forEach(function(v,i){gv[i]=!!v});
+ stage.innerHTML='<div class="grid sd"></div><div class="pad"></div>';
+ var g=stage.firstChild,pd=stage.lastChild,cs=[];
+ for(var i=0;i<81;i++)(function(i){var b=document.createElement("button"),r=i/9|0,c=i%9;
+  b.style.borderRight=c%3===2&&c<8?"2px solid var(--ink)":"";b.style.borderBottom=r%3===2&&r<8?"2px solid var(--ink)":"";
+  b.onclick=function(){sel=i;draw()};cs.push(b);g.appendChild(b)})(i);
+ [1,2,3,4,5,6,7,8,9,"⌫"].forEach(function(v){var b=document.createElement("button");b.textContent=v;
+  b.onclick=function(){if(sel<0||gv[sel]||done)return;p[sel]=v==="⌫"?0:v;draw();check()};pd.appendChild(b)});
+ function dup(i){var v=p[i];if(!v)return false;p[i]=0;var r=!sdOk(p,i,v);p[i]=v;return r}
+ function draw(){cs.forEach(function(b,i){b.textContent=p[i]||"";b.className=(gv[i]?"g ":"")+(i===sel?"s ":"")+(dup(i)?"x":"")})}
+ function check(){if(p.every(function(v,i){return v&&!dup(i)})){done=true;var s=Math.round((Date.now()-t0)/1000);setS(s);rec(s);toast("完成！用時 "+s+" 秒")}}
+ draw();
+}
+function slide(){
+ var b=[],e=15,m=0;for(var i=0;i<16;i++)b.push((i+1)%16);
+ function nbs(e){var r=e/4|0,c=e%4,o=[];if(r)o.push(e-4);if(r<3)o.push(e+4);if(c)o.push(e-1);if(c<3)o.push(e+1);return o}
+ for(i=0;i<300;i++){var n=nbs(e),j=n[Math.random()*n.length|0];b[e]=b[j];b[j]=0;e=j}
+ stage.innerHTML='<div class="grid" style="grid-template-columns:repeat(4,1fr)"></div>';var g=stage.firstChild;
+ function draw(){g.innerHTML=b.map(function(v,i){return'<button class="tile n" data-i="'+i+'"'+(v?"":' style="visibility:hidden"')+">"+v+"</button>"}).join("")}
+ g.onclick=function(ev){var i=+ev.target.dataset.i;if(isNaN(i)||nbs(e).indexOf(i)<0)return;b[e]=b[i];b[i]=0;e=i;m++;setS(m);draw();
+  if(b.every(function(v,k){return v===(k+1)%16})){rec(m);toast("拼好了！共 "+m+" 步")}};
+ draw();
+}
+function gomoku(){
+ stage.innerHTML='<canvas width="300" height="300"></canvas>';var c=stage.firstChild,x=c.getContext("2d"),b=[],m=0,over=false,N=15;
+ for(var i=0;i<225;i++)b.push(0);
+ function at(a,y){return a<0||y<0||a>=N||y>=N?-1:b[y*N+a]}
+ function ln(a,y,p){return[[1,0],[0,1],[1,1],[1,-1]].map(function(d){var n=1,o=0;
+  for(var s=-1;s<2;s+=2){var k=1;while(at(a+d[0]*k*s,y+d[1]*k*s)===p){n++;k++}if(at(a+d[0]*k*s,y+d[1]*k*s)===0)o++}return[n,o]})}
+ function val(a,y,p){return ln(a,y,p).reduce(function(t,r){var n=r[0],o=r[1];return t+(n>=5?1e5:n===4?[0,1e3,1e4][o]:n===3?[0,50,500][o]:n===2?[0,3,20][o]:0)},0)}
+ function draw(){x.fillStyle="#e8c27a";x.fillRect(0,0,300,300);x.strokeStyle="#2a2235";x.lineWidth=1;x.beginPath();
+  for(var i=0;i<N;i++){x.moveTo(10+i*20,10);x.lineTo(10+i*20,290);x.moveTo(10,10+i*20);x.lineTo(290,10+i*20)}x.stroke();
+  b.forEach(function(v,i){if(v){x.fillStyle=v===1?"#111":"#fff";x.beginPath();x.arc(10+i%N*20,10+(i/N|0)*20,9,0,7);x.fill();x.stroke()}})}
+ function put(a,y,p){b[y*N+a]=p;draw();return ln(a,y,p).some(function(r){return r[0]>=5})}
+ function ai(){var bs=-1,bx=7,by=7;for(var y=0;y<N;y++)for(var a=0;a<N;a++)if(!b[y*N+a]){var s=val(a,y,2)*1.1+val(a,y,1)+Math.random()-(Math.abs(a-7)+Math.abs(y-7))*.01;if(s>bs){bs=s;bx=a;by=y}}
+  if(put(bx,by,2)){over=true;toast("電腦獲勝")}}
+ c.onclick=function(e){if(over)return;var r=c.getBoundingClientRect(),a=Math.round(((e.clientX-r.left)/r.width*300-10)/20),y=Math.round(((e.clientY-r.top)/r.height*300-10)/20);
+  if(at(a,y)!==0)return;m++;setS(m);if(put(a,y,1)){over=true;rec(m);toast("你贏了！共 "+m+" 手");return}setTimeout(function(){if(!over)ai()},150)};
+ draw();
+}
+function idiom(){
+ var L="一帆風順 馬到成功 畫蛇添足 守株待兔 亡羊補牢 井底之蛙 掩耳盜鈴 狐假虎威 對牛彈琴 塞翁失馬 紙上談兵 破釜沉舟 臥薪嚐膽 完璧歸趙 三顧茅廬 草木皆兵 鶴立雞群 杯弓蛇影 望梅止渴 夜郎自大 刻舟求劍 揠苗助長 愚公移山 拋磚引玉 雪中送炭 錦上添花 負荊請罪 一鳴驚人 胸有成竹 葉公好龍".split(" ");
+ var a=L[Math.random()*L.length|0].split(""),pool=[],rows=[],cur=[],done=false;
+ a.forEach(function(ch){if(pool.indexOf(ch)<0)pool.push(ch)});
+ shuf(L.join("").split("")).forEach(function(ch){if(pool.length<12&&pool.indexOf(ch)<0)pool.push(ch)});
+ pool=shuf(pool);
+ stage.innerHTML='<div class="grid" style="grid-template-columns:repeat(4,1fr);max-width:280px;margin:0 auto 12px"></div><div class="pad" style="grid-template-columns:repeat(6,1fr)"></div><div class="pad" style="grid-template-columns:1fr 1fr"></div>';
+ var g=stage.children[0],pa=stage.children[1],pc=stage.children[2],cells=[],col=["var(--ln)","var(--gd)","var(--ac)"],tc=["","#2a2235","#fff"];
+ for(var i=0;i<24;i++){var d=document.createElement("div");d.className="cell";cells.push(d);g.appendChild(d)}
+ function draw(){cells.forEach(function(d,i){var r=i/4|0,k=i%4,w=rows[r];d.textContent=w?w.g[k]:(r===rows.length&&cur[k])||"";d.style.background=w?col[w.f[k]]:"";d.style.color=w?tc[w.f[k]]:""})}
+ function fb(g,a){var r=[0,0,0,0],u=[0,0,0,0],i,j;for(i=0;i<4;i++)if(g[i]===a[i]){r[i]=2;u[i]=1}
+  for(i=0;i<4;i++)if(!r[i])for(j=0;j<4;j++)if(!u[j]&&g[i]===a[j]){r[i]=1;u[j]=1;break}return r}
+ pool.forEach(function(ch){var b=document.createElement("button");b.textContent=ch;b.onclick=function(){if(!done&&cur.length<4){cur.push(ch);draw()}};pa.appendChild(b)});
+ var bk=document.createElement("button"),sb=document.createElement("button");bk.textContent="⌫";sb.textContent="送出";pc.appendChild(bk);pc.appendChild(sb);
+ bk.onclick=function(){cur.pop();draw()};
+ sb.onclick=function(){if(done||cur.length<4)return;var f=fb(cur,a);rows.push({g:cur,f:f});cur=[];setS(rows.length);draw();
+  if(f.every(function(v){return v===2})){done=true;rec(rows.length);toast("答對了！"+a.join(""))}
+  else if(rows.length>=6){done=true;toast("答案是 "+a.join(""))}};
+ draw();
+}
+function bullsAndCows(){
+ var secretDigits=[],tries=0,historyList=[];
+ while(secretDigits.length<4){
+  var d=Math.random()*10|0;
+  if(secretDigits.indexOf(d)<0)secretDigits.push(d);
+ }
+ stage.innerHTML='<div style="text-align:center;padding:10px">'
+  +'<p style="font-weight:bold;margin-bottom:8px">請輸入不重複的 4 位數字</p>'
+  +'<input id="bcinput" type="text" maxlength="4" placeholder="例如: 1234" style="width:140px;padding:10px;font-size:1.3rem;text-align:center;letter-spacing:4px;border:2px solid var(--ln);border-radius:10px;background:var(--pn);color:var(--ink)"><br><br>'
+  +'<button id="bcsub" style="padding:10px 24px;font-size:1.1rem;background:var(--ac);color:#fff;border:0;border-radius:10px;font-weight:600">送出猜測</button>'
+  +'<div id="bclog" style="margin-top:16px;max-height:160px;overflow-y:auto;text-align:left;padding:0 20px;font-size:0.95rem"></div>'
+  +'</div>';
+ var inp=$("#bcinput"),sub=$("#bcsub"),log=$("#bclog"),hint=$("#hint");
+ hint.textContent="A 代表數字對且位置對，B 代表數字對但位置錯。";
+ sub.onclick=function(){
+  var val=inp.value.trim();
+  if(!/^\d{4}$/.test(val)){hint.textContent="請輸入剛好 4 位數字！";return;}
+  var digits=val.split("").map(Number);
+  if(new Set(digits).size!==4){hint.textContent="4位數字不能有重複！";return;}
+  tries++;setS(tries);
+  
+  var a=0,b=0;
+  for(var i=0;i<4;i++){
+   if(digits[i]===secretDigits[i])a++;
+   else if(secretDigits.indexOf(digits[i])>=0)b++;
+  }
+  
+  historyList.unshift("第 "+tries.toString().padStart(2,"0")+" 次: <b>"+val+"</b> → <span style='color:var(--rd);font-weight:bold'>"+a+"A"+b+"B</span>");
+  log.innerHTML=historyList.join("<br>");
+  inp.value="";inp.focus();
+  
+  if(a===4){
+   rec(tries);toast("太神啦！正確答案是 "+secretDigits.join("")+"，共猜了 "+tries+" 次");
+  }else{
+   hint.textContent="上次猜測 "+val+"："+a+"A"+b+"B";
+  }
+ };
+ inp.onkeydown=function(e){if(e.key==="Enter")sub.onclick();};
+ return function(){};
+}
+
+/* === 黑白棋 (Othello) 帶落子提示開關 === */
+function othello(){
+ stage.innerHTML='<button id="othem" class="mode">💡 提示：開</button><canvas width="300" height="300"></canvas>';
+ var mb=$("#othem"),c=stage.querySelector("canvas"),x=c.getContext("2d"),hint=$("#hint");
+ var board=[],turn=1,over=false,blackScore=2,whiteScore=2,showHint=true;
+ for(var i=0;i<64;i++)board[i]=0;
+ board[27]=2; board[28]=1; board[35]=1; board[36]=2;
+ 
+ mb.onclick=function(){
+  showHint=!showHint;
+  mb.textContent=showHint?"💡 提示：開":"💡 提示：關";
+  draw();
+ };
+
+ const dirs=[[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+ 
+ function getFlips(b,r,c,player){
+  if(b[r*8+c]!==0)return [];
+  var opp=player===1?2:1,allFlips=[];
+  for(var d=0;d<8;d++){
+   var dr=dirs[d][0],dc=dirs[d][1];
+   var curR=r+dr,curC=c+dc,temp=[];
+   while(curR>=0&&curR<8&&curC>=0&&curC<8&&b[curR*8+curC]===opp){
+    temp.push([curR,curC]);
+    curR+=dr;curC+=dc;
+   }
+   if(temp.length>0&&curR>=0&&curR<8&&curC>=0&&curC<8&&b[curR*8+curC]===player){
+    allFlips=allFlips.concat(temp);
+   }
+  }
+  return allFlips;
+ }
+ 
+ function getValidMoves(b,player){
+  var moves=[];
+  for(var r=0;r<8;r++){
+   for(var c=0;c<8;c++){
+    if(getFlips(b,r,c,player).length>0)moves.push([r,c]);
+   }
+  }
+  return moves;
+ }
+ 
+ function updateScores(){
+  blackScore=0;whiteScore=0;
+  for(var i=0;i<64;i++){
+   if(board[i]===1)blackScore++;
+   if(board[i]===2)whiteScore++;
+  }
+  setS(blackScore);
+ }
+ 
+ function draw(){
+  x.fillStyle="#2f7d6d";x.fillRect(0,0,300,300);
+  x.strokeStyle="#1a1830";x.lineWidth=1;
+  for(var i=0;i<=8;i++){
+   x.beginPath();x.moveTo(i*37.5,0);x.lineTo(i*37.5,300);x.stroke();
+   x.beginPath();x.moveTo(0,i*37.5);x.lineTo(300,i*37.5);x.stroke();
+  }
+  var validMoves=turn===1?getValidMoves(board,1):[];
+  for(var i=0;i<64;i++){
+   var r=i/8|0,c=i%8;
+   if(board[i]===1){
+    x.fillStyle="#111";x.beginPath();x.arc(c*37.5+18.75,r*37.5+18.75,14,0,7);x.fill();
+   }else if(board[i]===2){
+    x.fillStyle="#fff";x.beginPath();x.arc(c*37.5+18.75,r*37.5+18.75,14,0,7);x.fill();
+   }else if(showHint&&turn===1&&validMoves.some(function(m){return m[0]===r&&m[1]===c})){
+    x.fillStyle="rgba(255,255,255,0.4)";x.beginPath();x.arc(c*37.5+18.75,r*37.5+18.75,6,0,7);x.fill();
+   }
+  }
+  updateScores();
+  if(turn===1)hint.textContent="輪到你了 (黑棋) 點擊圓點落子";
+  else hint.textContent="電腦思考中...";
+ }
+ 
+ function aiMove(){
+  if(over)return;
+  var moves=getValidMoves(board,2);
+  if(moves.length===0){
+   if(getValidMoves(board,1).length===0){endGame();return;}
+   turn=1;draw();return;
+  }
+  setTimeout(function(){
+   var m=moves[Math.random()*moves.length|0];
+   var flips=getFlips(board,m[0],m[1],2);
+   board[m[0]*8+m[1]]=2;
+   flips.forEach(function(f){board[f[0]*8+f[1]]=2;});
+   
+   if(getValidMoves(board,1).length>0){
+    turn=1;
+   }else if(getValidMoves(board,2).length>0){
+    turn=2;aiMove();return;
+   }else{
+    endGame();return;
+   }
+   draw();
+  },500);
+ }
+ 
+ function endGame(){
+  over=true;
+  updateScores();
+  var msg=blackScore>whiteScore?"你贏了！黑："+blackScore+" vs 白："+whiteScore:(blackScore<whiteScore?"電腦獲勝！黑："+blackScore+" vs 白："+whiteScore:"平手！");
+  rec(blackScore);
+  toast(msg);
+ }
+ 
+ c.onclick=function(e){
+  if(over||turn!==1)return;
+  var rect=c.getBoundingClientRect();
+  var cIdx=((e.clientX-rect.left)/rect.width*300/37.5)|0;
+  var rIdx=((e.clientY-rect.top)/rect.height*300/37.5)|0;
+  var flips=getFlips(board,rIdx,cIdx,1);
+  if(flips.length===0)return;
+  
+  board[rIdx*8+cIdx]=1;
+  flips.forEach(function(f){board[f[0]*8+f[1]]=1;});
+  
+  if(getValidMoves(board,2).length>0){
+   turn=2;draw();aiMove();
+  }else if(getValidMoves(board,1).length>0){
+   turn=1;draw();
+  }else{
+   endGame();
+  }
+ };
+ 
+ draw();
+ return function(){};
+}
+
+var G=[
+ {id:"mem",n:"翻翻樂",i:"🧋",low:1,run:memory,h:"翻開兩張相同的牌，步數越少越好。"},
+ {id:"mol",n:"打地鼠",i:"🐹",run:mole,h:"30 秒內盡量多點中地鼠。"},
+ {id:"mine",n:"踩地雷",i:"💣",low:1,run:mines,h:"點「⛏ 挖開」切換成插旗模式。分數欄顯示剩餘地雷數，過關後顯示用時（秒）。"},
+ {id:"sdk",n:"數獨",i:"🧩",low:1,run:sudoku,h:"點格子再點數字，每行、每列、每個 3×3 宮都不能重複。分數是用時（秒）。"},
+ {id:"slp",n:"滑塊拼圖",i:"🖼️",run:slide,h:"點旁邊的數字滑進空格，排成 1 到 15。分數是步數。"},
+ {id:"gmk",n:"五子棋",i:"⚫",low:1,run:gomoku,h:"你執黑先下，先連成五子者勝。分數是你下的手數。（金角銀邊草肚皮！）"},
+ {id:"idm",n:"猜成語",i:"📖",low:1,run:idiom,h:"從 12 個字挑出 4 字成語。綠色＝位置正確，黃色＝成語裡有但位置不對。6 次機會，分數是猜的次數。"},
+ {id:"1a2b",n:"1A2B 猜數字",i:"🔢",low:1,run:bullsAndCows,h:"猜 4 個不重複的數字。A代表數字與位置皆對，B代表數字對但位置錯。"},
+ {id:"oth",n:"黑白棋",i:"⚪",low:0,run:othello,h:"黑白棋（翻轉棋）：夾住對方的棋子就能翻轉，結算時棋子多者獲勝！可點擊上方按鈕開關落子提示。"}
+];
+
+G.forEach(function(g){var b=document.createElement("button");b.innerHTML="<span>"+g.i+"</span>"+g.n;b.onclick=function(){open(g)};$("#menu").appendChild(b)});
+$("#back").onclick=close;$("#rs").onclick=function(){open(cur)};
+})();
+</script>
+</body>
+</html>
