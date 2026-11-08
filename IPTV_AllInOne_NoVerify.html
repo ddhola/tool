@@ -1,0 +1,1514 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>IPTV 終極整合工具箱 - 免驗證全功能版</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.jsdelivr.net/npm/opencc-js@1.0.5/dist/umd/full.js"></script>
+    <style>
+        :root {
+            --primary: #1a73e8;
+            --purple: #8e44ad;
+            --success: #27ae60;
+            --warning: #f9ab00;
+            --error: #ea4335;
+            --orange: #e67e22;
+            --dark: #202124;
+            --dark-grey: #34495e;
+            --bg: #f4f6f8;
+            --border: #dadce0;
+        }
+        body, html {
+            font-family: "Segoe UI", "Microsoft JhengHei", sans-serif;
+            margin: 0; padding: 0;
+            background: var(--bg);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        header {
+            background: white;
+            padding: 0 18px;
+            height: 52px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+            z-index: 100;
+            flex-shrink: 0;
+        }
+        .logo {
+            font-size: 1.15rem;
+            font-weight: bold;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.8rem;
+            background: #f1f3f4;
+            padding: 4px 10px;
+            border-radius: 20px;
+            color: #555;
+            font-weight: normal;
+        }
+        .status-dot { width: 9px; height: 9px; border-radius: 50%; background: #ccc; }
+        .dot-green { background: var(--success); box-shadow: 0 0 5px var(--success); }
+        .dot-blue { background: var(--primary); box-shadow: 0 0 5px var(--primary); }
+        .dot-red { background: var(--error); box-shadow: 0 0 5px var(--error); }
+
+        .header-actions { display: flex; align-items: center; gap: 10px; }
+
+        main { display: flex; flex: 1; min-height: 0; overflow: hidden; }
+        
+        /* 側邊欄 */
+        .sidebar {
+            width: 310px;
+            background: white;
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            padding: 12px;
+            box-sizing: border-box;
+            overflow-y: auto;
+            flex-shrink: 0;
+            gap: 10px;
+        }
+        .card {
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 10px 12px;
+            flex-shrink: 0;
+        }
+        .card-title {
+            font-weight: bold;
+            margin-bottom: 8px;
+            font-size: 0.85rem;
+            color: var(--dark);
+            border-left: 4px solid var(--primary);
+            padding-left: 7px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .btn-group { display: flex; gap: 6px; margin-top: 6px; }
+        .btn-group button { flex: 1; }
+        .option-item {
+            display: flex;
+            align-items: center;
+            font-size: 0.8rem;
+            margin-bottom: 6px;
+            cursor: pointer;
+            color: #333;
+            gap: 6px;
+        }
+        #logPanel {
+            flex: 1;
+            min-height: 150px;
+            background: #1e272e;
+            color: #d2dae2;
+            border-radius: 6px;
+            padding: 10px;
+            font-family: Consolas, monospace;
+            font-size: 11.5px;
+            overflow-y: auto;
+            line-height: 1.45;
+            border: 1px solid #485460;
+        }
+
+        /* 主內容區 */
+        .content-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 12px;
+            gap: 10px;
+            min-width: 0;
+            overflow: hidden;
+        }
+        .top-io-row {
+            display: grid;
+            grid-template-columns: 1.3fr 1fr;
+            gap: 10px;
+            height: 76px;
+            flex-shrink: 0;
+        }
+        .url-bar {
+            display: flex;
+            gap: 8px;
+            background: white;
+            padding: 8px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            align-items: stretch;
+        }
+        #urlInput {
+            flex: 1;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 6px 10px;
+            outline: none;
+            font-family: Consolas, monospace;
+            resize: none;
+            font-size: 11.5px;
+        }
+        .drop-zone {
+            border: 2px dashed var(--primary);
+            background: rgba(26, 115, 232, 0.04);
+            text-align: center;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            color: #555;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: 0.2s;
+            padding: 6px;
+        }
+        .drop-zone.highlight {
+            border-color: var(--success);
+            background: #e8f5e9;
+            color: var(--success);
+            font-weight: bold;
+        }
+
+        /* 快捷工具列 */
+        .toolbar {
+            display: flex;
+            gap: 8px;
+            background: white;
+            padding: 8px 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+            flex-shrink: 0;
+        }
+        .stats-bar {
+            margin-left: auto;
+            display: flex;
+            gap: 12px;
+            font-size: 0.8rem;
+            font-weight: bold;
+        }
+
+        /* 編輯與結果區 */
+        .editor-grid {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1fr 1.25fr;
+            gap: 12px;
+            min-height: 0;
+        }
+        .editor-container {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            min-height: 0;
+            background: white;
+            padding: 10px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+        .panel-header {
+            font-size: 0.82rem;
+            font-weight: bold;
+            color: #2c3e50;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 26px;
+        }
+        textarea.editor {
+            flex: 1;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            padding: 10px;
+            font-family: 'Consolas', monospace;
+            font-size: 12px;
+            resize: none;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            line-height: 1.4;
+        }
+        .table-wrapper {
+            flex: 1;
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            overflow-y: auto;
+        }
+        table { width: 100%; border-collapse: collapse; font-size: 11.5px; table-layout: fixed; }
+        thead th {
+            position: sticky; top: 0;
+            background: #f8f9fa;
+            border-bottom: 2px solid var(--border);
+            padding: 7px 6px;
+            text-align: left;
+            z-index: 5;
+            color: #333;
+        }
+        tbody td {
+            padding: 6px;
+            border-bottom: 1px solid #eee;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        tbody tr:hover { background: #f1f7ff; }
+        .col-id { width: 42px; text-align: center; color: #888; border-right: 1px solid #eee; }
+        .badge-cat {
+            background: #e8f0fe;
+            color: var(--primary);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10.5px;
+            font-weight: bold;
+        }
+
+        /* 按鈕樣式 */
+        button {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 5px;
+            color: white;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 0.8rem;
+            transition: opacity 0.2s, transform 0.1s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+        }
+        button:hover { opacity: 0.92; }
+        button:active { transform: scale(0.98); }
+        .btn-primary { background: var(--primary); }
+        .btn-purple { background: var(--purple); }
+        .btn-success { background: var(--success); }
+        .btn-orange { background: var(--orange); }
+        .btn-dark { background: var(--dark-grey); }
+        .btn-danger { background: var(--error); }
+        .btn-outline {
+            background: white;
+            color: #444;
+            border: 1px solid var(--border);
+            font-size: 0.78rem;
+        }
+        .btn-outline:hover { background: #f8f9fa; }
+        .tab-btn {
+            padding: 3px 10px;
+            font-size: 0.75rem;
+            border-radius: 4px;
+            border: 1px solid var(--border);
+            background: #f1f3f4;
+            color: #555;
+            cursor: pointer;
+        }
+        .tab-btn.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+
+        /* 設定檔來源挑選視窗 */
+        .modal-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.45);
+            display: none; align-items: center; justify-content: center; z-index: 1000;
+        }
+        .modal {
+            background: #fff; border-radius: 10px; width: min(900px, 94vw); max-height: 86vh;
+            display: flex; flex-direction: column; box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+        }
+        .modal-head {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px 16px; border-bottom: 1px solid var(--border); font-weight: bold; font-size: 0.95rem;
+        }
+        .modal-tools {
+            display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+            padding: 8px 16px; border-bottom: 1px solid var(--border); background: #fafafa; font-size: 0.8rem;
+        }
+        .modal-list { overflow-y: auto; padding: 6px 8px; flex: 1; min-height: 120px; }
+        .modal-foot {
+            display: flex; justify-content: flex-end; gap: 8px;
+            padding: 10px 16px; border-top: 1px solid var(--border);
+        }
+        .pick-group {
+            font-size: 0.75rem; font-weight: bold; color: #666; background: #f1f3f4;
+            padding: 4px 8px; margin: 6px 0 2px; border-radius: 4px;
+        }
+        .pick-row {
+            display: flex; gap: 8px; align-items: baseline; padding: 4px 8px; cursor: pointer;
+            border-radius: 4px; font-size: 0.8rem;
+        }
+        .pick-row:hover { background: #f5f8ff; }
+        .pick-name { flex: 0 0 34%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .pick-url {
+            flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+            font-family: Consolas, monospace; font-size: 0.75rem; color: #555;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="logo">
+        🚀 IPTV 終極整合工具箱
+        <span class="status-badge">
+            <span id="dot" class="status-dot"></span>
+            <span id="ruleStatus">規則初始化中...</span>
+        </span>
+    </div>
+    <div class="header-actions">
+        <span id="invalidCountHeader" style="font-size: 0.8rem; color: #666; background:#fff3e0; padding:4px 10px; border-radius:4px; border:1px solid #ffe0b2;">
+            🚫 黑名單記憶: 0 筆
+        </span>
+        <button class="btn-danger" onclick="clearAll()">🗑️ 全部清除重置</button>
+    </div>
+</header>
+
+<main>
+    <!-- 左側控制欄 -->
+    <div class="sidebar">
+        <div class="card">
+            <div class="card-title">1. 規則管理 (GitHub / 本地)</div>
+            <div class="btn-group">
+                <button class="btn-outline" onclick="initRuleFlow()">🔄 同步雲端規則</button>
+                <button class="btn-outline" onclick="document.getElementById('ruleFileManual').click()">📂 載入本地規則</button>
+            </div>
+            <input type="file" id="ruleFileManual" style="display:none;" onchange="loadRuleManual(this)">
+        </div>
+
+        <div class="card">
+            <div class="card-title">2. 轉換與過濾設定</div>
+            <label class="option-item">
+                <input type="checkbox" id="autoTW" checked onchange="saveOptions()"> 自動轉台灣繁體 (OpenCC)
+            </label>
+            <label class="option-item">
+                <input type="checkbox" id="fixLines" checked onchange="saveOptions()"> 自動修復斷行 (名稱與網址合併)
+            </label>
+            <label class="option-item">
+                <input type="checkbox" id="useRulesFilter" checked onchange="saveOptions(); runProcess();"> 依規則過濾與雙層精確排序
+            </label>
+            <label class="option-item">
+                <input type="checkbox" id="useBlacklist" checked onchange="saveOptions(); runProcess();"> 自動剔除黑名單網址
+            </label>
+            <label class="option-item">
+                <input type="checkbox" id="appendMode" onchange="saveOptions()"> 批次讀取時附加到現有內容 (不覆蓋)
+            </label>
+            <button class="btn-primary" style="width:100%; height:38px; margin-top:4px; font-size:0.85rem;" onclick="runProcess()">
+                ⚡ 立即分析、排序與轉換 (免驗證)
+            </button>
+        </div>
+
+        <div class="card">
+            <div class="card-title">3. 失效黑名單管理 (選用過濾)</div>
+            <div class="btn-group">
+                <button class="btn-outline" onclick="exportInvalidUrls()">📤 導出 JSON</button>
+                <button class="btn-outline" onclick="triggerManualImport()">📥 導入 JSON</button>
+            </div>
+            <button class="btn-outline" style="width:100%; margin-top:6px; color:var(--error); border-color:#f5c6cb;" onclick="clearInvalidData()">
+                🧹 清空黑名單記憶庫
+            </button>
+        </div>
+
+        <div class="card-title" style="margin-bottom:2px; padding-left:4px;">SYSTEM LOG (系統紀錄)</div>
+        <div id="logPanel"></div>
+    </div>
+
+    <!-- 右側工作區 -->
+    <div class="content-area">
+        <!-- 頂部讀取區 -->
+        <div class="top-io-row">
+            <div class="url-bar">
+                <textarea id="urlInput" placeholder="請貼上遠端 M3U / TXT 網址 (每行一個，支援多代理突破封鎖，並行讀取)..." oninput="saveSessionData()"></textarea>
+                <button id="fetchBtn" class="btn-primary" style="width: 115px; flex-shrink:0;" onclick="batchFetchUrls()">🌐 批次強力讀取</button>
+            </div>
+            <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+                <div>📂 <strong>拖放 .m3u / .txt 檔案至此</strong>，或點擊選擇檔案</div>
+                <div style="font-size:0.75rem; color:#888; margin-top:3px;">(自動辨識 UTF-8 / GBK / Big5 編碼並合併轉換)</div>
+                <input type="file" id="fileInput" multiple hidden onchange="handleFiles(this.files)">
+            </div>
+        </div>
+
+        <!-- 快捷操作工具列 -->
+        <div class="toolbar">
+            <button class="btn-purple" onclick="pasteFromClipboard()">📋 從剪貼簿貼上</button>
+            <button id="langBtn" class="btn-orange" onclick="toggleLanguage()">🔄 切換為簡體</button>
+            <button class="btn-success" onclick="copyResultText('txt')">📄 複製結果 TXT</button>
+            <button class="btn-success" onclick="copyResultText('m3u')">📄 複製結果 M3U</button>
+            <button class="btn-dark" onclick="downloadFile('txt')">⬇ 下載時間戳 TXT</button>
+            <button class="btn-dark" onclick="downloadFile('m3u')">⬇ 下載時間戳 M3U</button>
+
+            <div class="stats-bar">
+                <span style="color:#555;" id="rawCountSpan">原始: 0</span>
+                <span style="color:var(--primary);" id="uniqueCountSpan">去重: 0</span>
+                <span style="color:var(--orange);" id="skipCountSpan">規則略過: 0</span>
+                <span style="color:var(--error);" id="blackCountSpan">黑名單剔除: 0</span>
+                <span style="color:var(--success);" id="finalCountSpan">最終保留: 0</span>
+            </div>
+        </div>
+
+        <!-- 雙欄編輯與預覽區 -->
+        <div class="editor-grid">
+            <!-- 左欄：原始資料 -->
+            <div class="editor-container">
+                <div class="panel-header">
+                    <span>SOURCE CONTENT (原始內容 / 支援直接編輯)</span>
+                    <button class="btn-outline" style="padding:2px 8px; font-size:0.72rem;" onclick="formatSourceInput()">✨ 執行斷行修復與繁體化</button>
+                </div>
+                <textarea id="sourceArea" class="editor" placeholder="在此貼上或載入 M3U / TXT 原始內容，系統將即時轉換..." oninput="onSourceInput()"></textarea>
+            </div>
+
+            <!-- 右欄：結果表格與純文字雙視圖 -->
+            <div class="editor-container">
+                <div class="panel-header">
+                    <span>CONVERTED RESULT (處理結果 - 免驗證即時輸出)</span>
+                    <div style="display:flex; gap:4px;">
+                        <button id="tabTableBtn" class="tab-btn active" onclick="switchResultView('table')">📊 分類表格預覽</button>
+                        <button id="tabTxtBtn" class="tab-btn" onclick="switchResultView('txt')">📝 TXT 格式預覽</button>
+                        <button id="tabM3uBtn" class="tab-btn" onclick="switchResultView('m3u')">📝 M3U 格式預覽</button>
+                    </div>
+                </div>
+
+                <!-- 視圖 1：表格 -->
+                <div id="tableView" class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th class="col-id">#</th>
+                                <th style="width:18%">分類群組</th>
+                                <th style="width:28%">頻道名稱</th>
+                                <th style="width:44%">播放地址</th>
+                            </tr>
+                        </thead>
+                        <tbody id="resultTableBody"></tbody>
+                    </table>
+                </div>
+
+                <!-- 視圖 2：文字預覽框 -->
+                <textarea id="outputArea" class="editor" style="display:none;" readonly placeholder="轉換後的結果將顯示於此..."></textarea>
+            </div>
+        </div>
+    </div>
+</main>
+
+<!-- TVBox 設定檔：來源挑選視窗 -->
+<div id="pickerOverlay" class="modal-overlay">
+    <div class="modal">
+        <div class="modal-head">
+            <span id="pickerTitle">📦 TVBox 設定檔</span>
+            <button class="btn-outline" onclick="closeSourcePicker()">✖ 關閉</button>
+        </div>
+        <div class="modal-tools">
+            <button class="btn-outline" onclick="pickerSelectAll(true)">全選</button>
+            <button class="btn-outline" onclick="pickerSelectAll(false)">全不選</button>
+            <label class="option-item" style="margin:0;">
+                <input type="checkbox" id="pickerExcludeAdult" checked onchange="pickerAdultFilter()"> 排除名稱含 🔞 的來源
+            </label>
+            <span id="pickerCount" style="margin-left:auto; color:#555;"></span>
+        </div>
+        <div id="pickerList" class="modal-list"></div>
+        <div class="modal-foot">
+            <button class="btn-outline" onclick="commitPicker(false)">➕ 加入網址欄</button>
+            <button class="btn-primary" style="padding:6px 14px;" onclick="commitPicker(true)">🌐 加入並立即讀取</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const GITHUB_RULE_URL = "https://raw.githubusercontent.com/ddhola/tool/refs/heads/main/all_rules.txt";
+    let keepSet = new Set(), categoryMap = [], sortRef = {}, invalidSet = new Set();
+    const toTW = OpenCC.Converter({ from: 'cn', to: 'twp' });
+    const toCN = OpenCC.Converter({ from: 'tw', to: 'cn' });
+
+    let currentLangMode = 'tw'; // 'tw' or 'cn'
+    let currentViewMode = 'table'; // 'table', 'txt', 'm3u'
+    window.processedList = [];
+
+    window.onload = () => {
+        loadOptions();
+        loadInvalidData();
+        loadSessionData();
+        initRuleFlow();
+        setupDragAndDrop();
+        addLog("系統初始化完成 (免驗證極速模式)。", "success");
+    };
+
+    /* ================= 系統紀錄與狀態 ================= */
+    function addLog(msg, type = "info") {
+        const p = document.getElementById('logPanel');
+        const d = document.createElement("div");
+        if (type === "success") d.style.color = "#81c995";
+        else if (type === "warning") d.style.color = "#f9ab00";
+        else if (type === "error") d.style.color = "#f28b82";
+        else if (type === "primary") d.style.color = "#74b9ff";
+        const now = new Date().toLocaleTimeString('zh-TW', { hour12: false });
+        d.textContent = `[${now}] ${msg}`;
+        p.appendChild(d);
+        p.scrollTop = p.scrollHeight;
+    }
+
+    function setUIState(cls, msg) {
+        document.getElementById('dot').className = "status-dot " + cls;
+        document.getElementById('ruleStatus').innerText = msg;
+    }
+
+    function getFullTimestamp() {
+        const n = new Date();
+        return n.getFullYear() +
+               String(n.getMonth() + 1).padStart(2, '0') +
+               String(n.getDate()).padStart(2, '0') +
+               String(n.getHours()).padStart(2, '0') +
+               String(n.getMinutes()).padStart(2, '0') +
+               String(n.getSeconds()).padStart(2, '0');
+    }
+
+    /* ================= 規則管理 (GitHub & 快取 & 手動) ================= */
+    async function initRuleFlow() {
+        setUIState("status-dot", "正在同步規則...");
+        try {
+            const res = await fetch(GITHUB_RULE_URL, { cache: "no-store" });
+            if (!res.ok) throw new Error("網路回應不正常");
+            const text = await res.text();
+            parseRules(text);
+            localStorage.setItem('all_rules_cache', text);
+            setUIState("dot-green", `規則已就緒 (雲端最新: ${keepSet.size} 條)`);
+            addLog(`成功從 GitHub 同步規則 (保留關鍵字: ${keepSet.size} 個，分類: ${categoryMap.length} 組)`, "success");
+            if (document.getElementById('sourceArea').value.trim()) runProcess();
+        } catch (err) {
+            const cached = localStorage.getItem('all_rules_cache');
+            if (cached) {
+                parseRules(cached);
+                setUIState("dot-blue", `規則已就緒 (本地快取: ${keepSet.size} 條)`);
+                addLog("雲端連線失敗，已自動載入本地快取規則。", "warning");
+                if (document.getElementById('sourceArea').value.trim()) runProcess();
+            } else {
+                setUIState("dot-red", "無規則 (全數保留模式)");
+                addLog("無法取得雲端規則且無快取，將以「不篩選全數保留」模式運作，或請手動載入規則檔。", "error");
+                if (document.getElementById('sourceArea').value.trim()) runProcess();
+            }
+        }
+    }
+
+    function parseRules(text) {
+        keepSet.clear();
+        categoryMap = [];
+        sortRef = {};
+
+        const lines = text.split(/\r?\n/);
+        let section = "";
+        let curCat = null;
+        let curSortCat = null;
+
+        lines.forEach(l => {
+            let line = l.trim();
+            if (!line || line.startsWith("#")) return;
+
+            if (line === "[KEEP_LIST]") { section = "KEEP"; curSortCat = null; return; }
+            if (line === "[CATEGORY_LIST]") { section = "CATEGORY"; curSortCat = null; return; }
+            if (line === "[SORT_LIST]") { section = "SORT"; curSortCat = null; return; }
+
+            if (section === "KEEP") {
+                keepSet.add(line.toUpperCase());
+            } else if (section === "CATEGORY") {
+                if (line.includes("#genre#")) {
+                    const name = line.split(",")[0].trim();
+                    curCat = { name, keywords: [] };
+                    categoryMap.push(curCat);
+                } else if (curCat) {
+                    curCat.keywords.push(line.toUpperCase());
+                }
+            } else if (section === "SORT") {
+                if (line.includes("#genre#")) {
+                    curSortCat = line.split(",")[0].trim();
+                    if (!sortRef[curSortCat]) sortRef[curSortCat] = [];
+                } else if (curSortCat) {
+                    sortRef[curSortCat].push(line.toUpperCase());
+                }
+            }
+        });
+    }
+
+    function loadRuleManual(input) {
+        const file = input.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = e => {
+            const text = e.target.result;
+            localStorage.setItem('all_rules_cache', text);
+            parseRules(text);
+            setUIState("dot-green", `手動規則 (${keepSet.size} 條)`);
+            addLog(`手動載入規則成功: ${file.name} (保留關鍵字: ${keepSet.size} 個)`, "success");
+            runProcess();
+        };
+        reader.readAsText(file, "utf-8");
+    }
+
+    /* ================= 智慧編碼與檔案拖放讀取 ================= */
+    function smartDecode(buffer) {
+        const encodings = ['utf-8', 'gbk', 'big5'];
+        for (let enc of encodings) {
+            try {
+                const decoder = new TextDecoder(enc, { fatal: true });
+                const text = decoder.decode(buffer);
+                if (!text.includes('�')) return { text, encoding: enc };
+            } catch (e) {}
+        }
+        return { text: new TextDecoder('utf-8').decode(buffer), encoding: 'utf-8 (fallback)' };
+    }
+
+    function setupDragAndDrop() {
+        const dropZone = document.getElementById('dropZone');
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(ev => {
+            dropZone.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); }, false);
+        });
+        ['dragenter', 'dragover'].forEach(ev => {
+            dropZone.addEventListener(ev, () => dropZone.classList.add('highlight'), false);
+        });
+        ['dragleave', 'drop'].forEach(ev => {
+            dropZone.addEventListener(ev, () => dropZone.classList.remove('highlight'), false);
+        });
+        dropZone.addEventListener('drop', e => {
+            handleFiles(e.dataTransfer.files);
+        }, false);
+    }
+
+    async function handleFiles(files) {
+        if (!files || !files.length) return;
+        let combined = "";
+        const cfgList = [];
+        for (let f of Array.from(files)) {
+            const buf = await f.arrayBuffer();
+            const decoded = smartDecode(buf);
+            const cfg = parseTvboxConfig(decoded.text);
+            if (cfg) {
+                cfgList.push(cfg);
+                addLog(`📦 ${f.name} 是 TVBox 設定檔 (直播來源 ${cfg.liveCount} 個、其他 .m3u/.txt ${cfg.extraCount} 個)`, "primary");
+                continue;
+            }
+            combined += (combined ? "\n" : "") + decoded.text.trim();
+            addLog(`檔案載入成功: ${f.name} (編碼: ${decoded.encoding})`, "success");
+        }
+        if (combined) loadIntoSource(combined);
+        if (cfgList.length) openSourcePicker(mergeConfigItems(cfgList), []);
+    }
+
+    const FETCH_TIMEOUT_DIRECT = 10000;   // 直連逾時 (毫秒)
+    const FETCH_TIMEOUT_PROXY = 15000;    // 代理逾時 (毫秒)
+    const FETCH_CONCURRENCY = 5;          // 同時讀取的來源數
+
+    async function fetchBufferWithTimeout(target, ms) {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), ms);
+        try {
+            const res = await fetch(target, { signal: ctrl.signal });
+            if (!res.ok) throw new Error("HTTP " + res.status);
+            return await res.arrayBuffer();
+        } finally {
+            clearTimeout(timer);
+        }
+    }
+
+    // GitHub 頁面網址 (blob) → raw 網址
+    function normalizeSourceUrl(u) {
+        const m = u.match(/^https?:\/\/github\.com\/([^\/]+)\/([^\/]+)\/blob\/(.+)$/i);
+        return m ? `https://raw.githubusercontent.com/${m[1]}/${m[2]}/${m[3]}` : u;
+    }
+
+    // 拿掉 ghfast.top/gh-proxy.org 這類「代理前綴 + 完整網址」的包裝，還原成原始網址
+    function unwrapProxyUrl(u) {
+        const m = u.match(/^https?:\/\/[^\/]+\/(https?:\/\/.+)$/i);
+        return m ? m[1] : u;
+    }
+
+    // 單一來源：依序嘗試 (原始網址直連) → 直連 → corsproxy → allorigins，每種都有逾時
+    async function fetchOneSource(url) {
+        const inner = unwrapProxyUrl(url);
+        const routes = [];
+        if (inner !== url) routes.push({ label: "還原原始網址直連", build: () => inner, timeout: FETCH_TIMEOUT_DIRECT });
+        routes.push({ label: "直連", build: u => u, timeout: FETCH_TIMEOUT_DIRECT });
+        routes.push({ label: "corsproxy", build: u => "https://corsproxy.io/?" + encodeURIComponent(inner), timeout: FETCH_TIMEOUT_PROXY });
+        routes.push({ label: "allorigins", build: u => "https://api.allorigins.win/raw?url=" + encodeURIComponent(inner), timeout: FETCH_TIMEOUT_PROXY });
+        const errors = [];
+        for (const r of routes) {
+            try {
+                const buf = await fetchBufferWithTimeout(r.build(url), r.timeout);
+                const decoded = smartDecode(buf);
+                const text = decoded.text.trim();
+                if (!text) throw new Error("內容為空");
+                return { ok: true, text, encoding: decoded.encoding, route: r.label };
+            } catch (e) {
+                errors.push(r.label + ": " + (e.name === "AbortError" ? "逾時" : e.message));
+            }
+        }
+        return { ok: false, errors };
+    }
+
+    // 並行工作池：最多同時執行 limit 個，結果依原順序回傳
+    async function runPool(items, limit, worker) {
+        const results = new Array(items.length);
+        let next = 0;
+        const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
+            while (true) {
+                const i = next++;
+                if (i >= items.length) break;
+                results[i] = await worker(items[i], i);
+            }
+        });
+        await Promise.all(runners);
+        return results;
+    }
+
+    function countChannels(text) {
+        return text.split(/\r?\n/).filter(l => {
+            const t = l.trim();
+            return t.includes("://") && !t.startsWith("#");
+        }).length;
+    }
+
+    function shortSourceName(url) {
+        try {
+            const u = new URL(url);
+            const last = u.pathname.split("/").filter(Boolean).pop() || "";
+            return u.host + (last ? "/" + last : "");
+        } catch (e) {
+            return url.substring(0, 50);
+        }
+    }
+
+    /* ================= TVBox 設定檔 (JSON) 展開 ================= */
+    // 若內容是 TVBox 設定檔 (含 lives 或 sites)，回傳可讀取的來源清單；否則回傳 null
+    function parseTvboxConfig(text) {
+        const t = (text || "").trimStart();
+        if (t[0] !== "{") return null;
+        let data;
+        try { data = JSON.parse(t); } catch (e) { return null; }
+        if (!data || (!Array.isArray(data.lives) && !Array.isArray(data.sites))) return null;
+
+        const items = [], seen = new Set();
+        const skipHost = /^https?:\/\/(127\.0\.0\.1|localhost|0\.0\.0\.0|192\.168\.|10\.)/i;
+        const add = (url, name, origin) => {
+            url = String(url).trim();
+            if (!/^https?:\/\//i.test(url) || skipHost.test(url) || seen.has(url)) return;
+            seen.add(url);
+            const nm = String(name || "").trim();
+            const adult = nm.includes("🔞");
+            items.push({ name: nm, url, origin, adult, checked: origin === "live" && !adult });
+        };
+
+        // 1. lives 陣列：設定檔正式宣告的直播來源
+        (Array.isArray(data.lives) ? data.lives : []).forEach(l => {
+            if (l && typeof l.url === "string") add(l.url, l.name, "live");
+        });
+        // 2. 全文掃描其他 .m3u / .txt 網址 (多半不是直播，預設不勾選)
+        const walk = v => {
+            if (typeof v === "string") {
+                (v.match(/https?:\/\/[^\s"'<>,|]+/gi) || []).forEach(u => {
+                    const path = u.split("?")[0].split("#")[0].toLowerCase();
+                    if (/\.(m3u|txt)$/.test(path)) add(u, "", "extra");
+                });
+            } else if (Array.isArray(v)) {
+                v.forEach(walk);
+            } else if (v && typeof v === "object") {
+                Object.values(v).forEach(walk);
+            }
+        };
+        walk(data);
+
+        return {
+            items,
+            liveCount: items.filter(i => i.origin === "live").length,
+            extraCount: items.filter(i => i.origin === "extra").length
+        };
+    }
+
+    let pickerItems = [], pickerConfigUrls = [];
+
+    function openSourcePicker(items, configUrls) {
+        pickerItems = items.map(i => ({ ...i }));
+        pickerConfigUrls = configUrls || [];
+        const live = pickerItems.filter(i => i.origin === "live").length;
+        const extra = pickerItems.length - live;
+        document.getElementById('pickerTitle').textContent =
+            `📦 TVBox 設定檔：直播來源 ${live} 個、其他 .m3u/.txt ${extra} 個`;
+        document.getElementById('pickerExcludeAdult').checked = true;
+        renderPicker();
+        document.getElementById('pickerOverlay').style.display = "flex";
+    }
+
+    function closeSourcePicker() {
+        document.getElementById('pickerOverlay').style.display = "none";
+    }
+
+    function isPickerOpen() {
+        return document.getElementById('pickerOverlay').style.display === "flex";
+    }
+
+    function updatePickerCount() {
+        const n = pickerItems.filter(i => i.checked).length;
+        document.getElementById('pickerCount').textContent = `已勾選 ${n} / ${pickerItems.length}`;
+    }
+
+    function renderPicker() {
+        const list = document.getElementById('pickerList');
+        list.innerHTML = "";
+        const frag = document.createDocumentFragment();
+        let lastOrigin = null;
+        pickerItems.forEach(it => {
+            if (it.origin !== lastOrigin) {
+                const h = document.createElement('div');
+                h.className = "pick-group";
+                h.textContent = it.origin === "live"
+                    ? "直播來源 (設定檔 lives)"
+                    : "其他 .m3u / .txt (多半不是直播來源，預設不勾選)";
+                frag.appendChild(h);
+                lastOrigin = it.origin;
+            }
+            const row = document.createElement('label');
+            row.className = "pick-row";
+            const cb = document.createElement('input');
+            cb.type = "checkbox";
+            cb.checked = it.checked;
+            cb.onchange = () => { it.checked = cb.checked; updatePickerCount(); };
+            const nm = document.createElement('span');
+            nm.className = "pick-name";
+            nm.textContent = it.name || "(無名稱)";
+            nm.title = it.name;
+            const ur = document.createElement('span');
+            ur.className = "pick-url";
+            ur.textContent = it.url;
+            ur.title = it.url;
+            row.append(cb, nm, ur);
+            frag.appendChild(row);
+        });
+        list.appendChild(frag);
+        updatePickerCount();
+    }
+
+    function pickerSelectAll(flag) {
+        pickerItems.forEach(i => { i.checked = flag; });
+        renderPicker();
+    }
+
+    function pickerAdultFilter() {
+        const exclude = document.getElementById('pickerExcludeAdult').checked;
+        pickerItems.forEach(i => { if (i.adult && i.origin === "live") i.checked = !exclude; });
+        renderPicker();
+    }
+
+    function commitPicker(readNow) {
+        const sel = pickerItems.filter(i => i.checked).map(i => i.url);
+        if (!sel.length) return alert("請至少勾選一個來源！");
+        const ta = document.getElementById('urlInput');
+        const drop = new Set(pickerConfigUrls);
+        const old = ta.value.split(/\r?\n/).map(x => x.trim())
+            .filter(x => x && !drop.has(x) && !drop.has(normalizeSourceUrl(x)));
+        ta.value = [...new Set([...old, ...sel])].join("\n");
+        saveSessionData();
+        closeSourcePicker();
+        addLog(`已將 ${sel.length} 個來源加入網址欄${readNow ? "，開始讀取" : ""}。`, "success");
+        if (readNow) batchFetchUrls();
+    }
+
+    function mergeConfigItems(cfgList) {
+        const seen = new Set(), out = [];
+        cfgList.forEach(cfg => cfg.items.forEach(i => {
+            if (!seen.has(i.url)) { seen.add(i.url); out.push(i); }
+        }));
+        return out;
+    }
+
+    /* ================= 批次讀取 ================= */
+    async function batchFetchUrls() {
+        const btn = document.getElementById('fetchBtn');
+        if (btn.disabled) return;
+
+        const lines = document.getElementById('urlInput').value
+            .split(/\r?\n/).map(u => u.trim()).filter(u => u);
+        if (!lines.length) return alert("請先輸入至少一個網址！");
+
+        const badFormat = lines.filter(u => !/^https?:\/\//i.test(u));
+        const urls = [...new Set(lines.filter(u => /^https?:\/\//i.test(u)).map(u => {
+            const n = normalizeSourceUrl(u);
+            if (n !== u) addLog(`🔗 GitHub 頁面網址已轉為 raw 原始檔: ${shortSourceName(n)}`, "primary");
+            return n;
+        }))];
+        if (badFormat.length) {
+            addLog(`⚠️ 略過 ${badFormat.length} 行非 http(s) 網址:`, "warning");
+            badFormat.forEach(u => addLog("   " + u.substring(0, 80), "warning"));
+        }
+        if (!urls.length) return alert("沒有有效的 http(s) 網址！");
+
+        saveSessionData();
+        const appendMode = document.getElementById('appendMode').checked;
+        const t0 = performance.now();
+        const oldLabel = btn.innerText;
+        btn.disabled = true;
+        btn.innerText = "⏳ 讀取中...";
+        addLog(`開始並行讀取 ${urls.length} 個來源 (同時 ${Math.min(FETCH_CONCURRENCY, urls.length)} 個，逾時 ${FETCH_TIMEOUT_DIRECT / 1000}/${FETCH_TIMEOUT_PROXY / 1000} 秒)...`, "primary");
+
+        try {
+            const results = await runPool(urls, FETCH_CONCURRENCY, async (url, i) => {
+                const t = performance.now();
+                const r = await fetchOneSource(url);
+                r.url = url;
+                const sec = ((performance.now() - t) / 1000).toFixed(1);
+                const tag = `[${i + 1}/${urls.length}] ${shortSourceName(url)}`;
+                if (r.ok) {
+                    const cfg = parseTvboxConfig(r.text);
+                    if (cfg) {
+                        r.config = cfg;
+                        addLog(`📦 ${tag}｜TVBox 設定檔｜直播來源 ${cfg.liveCount} 個、其他 .m3u/.txt ${cfg.extraCount} 個｜${r.route}｜${sec}s`, "primary");
+                    } else {
+                        r.count = countChannels(r.text);
+                        if (r.count > 0) {
+                            addLog(`✅ ${tag}｜${r.count} 個頻道｜${r.route}｜${r.encoding}｜${sec}s`, "success");
+                        } else {
+                            addLog(`⚠️ ${tag}｜讀取成功但未偵測到頻道 (可能不是 M3U/TXT)｜${r.route}｜${sec}s`, "warning");
+                        }
+                    }
+                } else {
+                    addLog(`❌ ${tag}｜讀取失敗｜${sec}s`, "error");
+                }
+                return r;
+            });
+
+            const failList = results.filter(r => !r.ok);
+            const configList = results.filter(r => r.ok && r.config);
+            const okList = results.filter(r => r.ok && !r.config);
+            const totalSec = ((performance.now() - t0) / 1000).toFixed(1);
+
+            // 失敗清單統一列在日誌
+            if (failList.length) {
+                addLog(`── 以下 ${failList.length} 個來源讀取失敗 ──`, "error");
+                failList.forEach(r => {
+                    addLog(r.url, "error");
+                    addLog("    原因: " + r.errors.join(" | "), "error");
+                });
+                addLog("提示: 失敗的來源可自行用瀏覽器下載後，拖放到右上角區域載入。", "warning");
+            }
+
+            const openPickerIfAny = () => {
+                if (!configList.length) return;
+                const items = mergeConfigItems(configList.map(r => r.config));
+                addLog(`偵測到 ${configList.length} 個 TVBox 設定檔，請在彈出視窗選擇要展開的直播來源。`, "primary");
+                openSourcePicker(items, configList.map(r => r.url));
+            };
+
+            if (!okList.length) {
+                if (configList.length) {
+                    addLog(`僅讀到設定檔，未讀到頻道清單 (耗時 ${totalSec}s)。`, "primary");
+                    openPickerIfAny();
+                } else {
+                    addLog(`所有來源皆失敗，編輯區內容未變更 (耗時 ${totalSec}s)。`, "error");
+                }
+                return;
+            }
+
+            const fetched = okList.map(r => r.text).join("\n");
+            let existing = document.getElementById('sourceArea').value.trim();
+            if (existing && parseTvboxConfig(existing)) existing = "";   // 編輯區若是貼上的設定檔 JSON，不併入
+            const merged = (appendMode && existing) ? existing + "\n" + fetched : fetched;
+            loadIntoSource(merged);
+
+            const totalCh = okList.reduce((sum, r) => sum + r.count, 0);
+            addLog(`讀取完成: 成功 ${okList.length + configList.length}/${urls.length} 個來源，共 ${totalCh} 個頻道 (${appendMode && existing ? "已附加到現有內容" : "已覆蓋編輯區"}，耗時 ${totalSec}s)。`, "success");
+            openPickerIfAny();
+        } finally {
+            btn.disabled = false;
+            btn.innerText = oldLabel;
+        }
+    }
+
+        async function pasteFromClipboard() {
+        try {
+            const text = await navigator.clipboard.readText();
+            if (!text) return addLog("剪貼簿內容為空", "warning");
+            loadIntoSource(text);
+            addLog("已從剪貼簿貼上內容並完成預處理。", "success");
+        } catch (err) {
+            alert("無法直接讀取剪貼簿，請在左側編輯區按 Ctrl+V 貼上。");
+        }
+    }
+
+    /* ================= 預處理、繁簡轉換與核心分析 (免驗證) ================= */
+    function preprocessText(rawText) {
+        let content = rawText;
+
+        // 1. 自動修復斷行
+        if (document.getElementById('fixLines').checked) {
+            const lines = content.split(/\r?\n/).map(l => l.trim()).filter(l => l);
+            let merged = [];
+            for (let i = 0; i < lines.length; i++) {
+                if (
+                    i < lines.length - 1 &&
+                    !lines[i].startsWith("#") &&
+                    !lines[i].includes("://") &&
+                    !lines[i].endsWith("#genre#") &&
+                    (lines[i + 1].includes("://") || lines[i + 1].startsWith(","))
+                ) {
+                    let next = lines[i + 1].startsWith(",") ? lines[i + 1] : "," + lines[i + 1];
+                    merged.push(lines[i] + next);
+                    i++;
+                } else {
+                    merged.push(lines[i]);
+                }
+            }
+            content = merged.join("\n");
+        }
+
+        // 2. 自動轉台灣繁體
+        if (document.getElementById('autoTW').checked) {
+            content = toTW(content);
+            currentLangMode = 'tw';
+            updateLangBtnUI();
+        }
+
+        return content;
+    }
+
+    function loadIntoSource(rawText) {
+        const cfg = parseTvboxConfig(rawText);
+        if (cfg) {
+            addLog(`偵測到 TVBox 設定檔 (直播來源 ${cfg.liveCount} 個、其他 .m3u/.txt ${cfg.extraCount} 個)，請在彈出視窗選擇來源。`, "primary");
+            openSourcePicker(cfg.items, []);
+            return;
+        }
+        const processed = preprocessText(rawText);
+        document.getElementById('sourceArea').value = processed;
+        saveSessionData();
+        runProcess();
+    }
+
+    function formatSourceInput() {
+        const current = document.getElementById('sourceArea').value;
+        if (!current.trim()) return;
+        loadIntoSource(current);
+        addLog("已手動執行斷行修復與繁體化。", "success");
+    }
+
+    function onSourceInput() {
+        saveSessionData();
+        const v = document.getElementById('sourceArea').value;
+        if (v.length > 200 && v.trimStart()[0] === "{" && !isPickerOpen()) {
+            const cfg = parseTvboxConfig(v);
+            if (cfg) {
+                addLog(`偵測到貼上的 TVBox 設定檔 (直播來源 ${cfg.liveCount} 個、其他 .m3u/.txt ${cfg.extraCount} 個)，請在彈出視窗選擇來源。`, "primary");
+                openSourcePicker(cfg.items, []);
+                return;
+            }
+        }
+        runProcess();
+    }
+
+    function toggleLanguage() {
+        const sArea = document.getElementById('sourceArea');
+        if (!sArea.value.trim()) return;
+
+        if (currentLangMode === 'tw') {
+            sArea.value = toCN(sArea.value);
+            currentLangMode = 'cn';
+            addLog("已切換為：簡體中文模式", "warning");
+        } else {
+            sArea.value = toTW(sArea.value);
+            currentLangMode = 'tw';
+            addLog("已切換為：台灣繁體模式", "success");
+        }
+        updateLangBtnUI();
+        runProcess();
+    }
+
+    function updateLangBtnUI() {
+        const btn = document.getElementById('langBtn');
+        if (currentLangMode === 'tw') {
+            btn.innerText = "🔄 切換為簡體";
+            btn.className = "btn-orange";
+        } else {
+            btn.innerText = "🔄 切換為繁體";
+            btn.className = "btn-dark";
+        }
+    }
+
+    /* ================= 解析、過濾、雙層排序與輸出 (不做任何網路驗證) ================= */
+    function getCategoryName(channelName) {
+        const upN = channelName.toUpperCase();
+        for (let c of categoryMap) {
+            if (c.keywords.some(k => upN.includes(k))) {
+                return c.name;
+            }
+        }
+        return null;
+    }
+
+    function applyRulesSort(list) {
+        return list.sort((a, b) => {
+            const upA = a.name.toUpperCase();
+            const upB = b.name.toUpperCase();
+
+            // 第一層：分類順序
+            const catIdxA = categoryMap.findIndex(c => c.keywords.some(k => upA.includes(k)));
+            const catIdxB = categoryMap.findIndex(c => c.keywords.some(k => upB.includes(k)));
+
+            if (catIdxA !== catIdxB) {
+                if (catIdxA === -1) return 1;
+                if (catIdxB === -1) return -1;
+                return catIdxA - catIdxB;
+            }
+
+            // 第二層：同分類內的排序關鍵字順序
+            if (catIdxA === -1) {
+                return a.name.localeCompare(b.name, 'zh-TW', { numeric: true });
+            }
+
+            const catName = categoryMap[catIdxA].name;
+            const refList = sortRef[catName] || [];
+
+            const sortIdxA = refList.findIndex(k => upA.includes(k));
+            const sortIdxB = refList.findIndex(k => upB.includes(k));
+
+            if (sortIdxA !== sortIdxB) {
+                if (sortIdxA === -1) return 1;
+                if (sortIdxB === -1) return -1;
+                return sortIdxA - sortIdxB;
+            }
+
+            return a.name.localeCompare(b.name, 'zh-TW', { numeric: true });
+        });
+    }
+
+    function runProcess() {
+        const inputStr = document.getElementById('sourceArea').value.trim();
+        const tableBody = document.getElementById('resultTableBody');
+
+        if (!inputStr) {
+            tableBody.innerHTML = "";
+            document.getElementById('outputArea').value = "";
+            window.processedList = [];
+            updateStats(0, 0, 0, 0, 0);
+            return;
+        }
+
+        const useRules = document.getElementById('useRulesFilter').checked;
+        const useBlack = document.getElementById('useBlacklist').checked;
+
+        // 1. 同時支援 M3U 與 TXT 格式解析
+        const lines = inputStr.split(/\r?\n/).map(l => l.trim()).filter(l => l);
+        let rawList = [];
+        let tempName = "";
+        let tempGroup = "未分類";
+
+        for (let line of lines) {
+            if (line.startsWith("#EXTINF")) {
+                const gMatch = line.match(/group-title="([^"]+)"/i);
+                tempGroup = gMatch ? gMatch[1].trim() : "未分類";
+                const commaIdx = line.lastIndexOf(",");
+                tempName = commaIdx !== -1 ? line.substring(commaIdx + 1).trim() : "未知頻道";
+            } else if (line.endsWith(",#genre#")) {
+                tempGroup = line.split(",")[0].trim() || "未分類";
+            } else if (line.includes("://") && !line.startsWith("#")) {
+                if (line.includes(",") && !tempName) {
+                    const idx = line.indexOf(",");
+                    const namePart = line.substring(0, idx).trim();
+                    const urlPart = line.substring(idx + 1).trim();
+                    if (urlPart.includes("://")) {
+                        rawList.push({ name: namePart, url: urlPart, rawGroup: tempGroup });
+                    }
+                } else if (tempName) {
+                    rawList.push({ name: tempName, url: line, rawGroup: tempGroup });
+                    tempName = "";
+                } else if (line.includes(",")) {
+                    const idx = line.indexOf(",");
+                    const namePart = line.substring(0, idx).trim();
+                    const urlPart = line.substring(idx + 1).trim();
+                    rawList.push({ name: namePart, url: urlPart, rawGroup: tempGroup });
+                }
+            }
+        }
+
+        // 2. 依 URL 去重
+        let uniqueMap = new Map();
+        rawList.forEach(item => {
+            if (!uniqueMap.has(item.url)) {
+                uniqueMap.set(item.url, item);
+            }
+        });
+        let uniqueList = Array.from(uniqueMap.values());
+
+        // 3. 規則篩選與黑名單過濾 (完全不做網路連線驗證)
+        let skipRuleCount = 0;
+        let skipBlackCount = 0;
+        let filteredList = [];
+
+        for (let item of uniqueList) {
+            if (useBlack && invalidSet.has(item.url)) {
+                skipBlackCount++;
+                continue;
+            }
+
+            if (useRules && keepSet.size > 0) {
+                const upN = item.name.toUpperCase();
+                let matched = false;
+                for (let k of keepSet) {
+                    if (upN.includes(k)) { matched = true; break; }
+                }
+                if (!matched) {
+                    skipRuleCount++;
+                    continue;
+                }
+            }
+
+            // 決定分類名稱
+            let assignedCat = (useRules && categoryMap.length > 0)
+                ? (getCategoryName(item.name) || "未分類")
+                : (item.rawGroup || getCategoryName(item.name) || "未分類");
+
+            const finalCatName = currentLangMode === 'cn' ? toCN(assignedCat) : assignedCat;
+            filteredList.push({
+                name: item.name,
+                url: item.url,
+                category: finalCatName
+            });
+        }
+
+        // 4. 排序
+        if (useRules && categoryMap.length > 0) {
+            filteredList = applyRulesSort(filteredList);
+            // 更新排序後的分類名稱顯示
+            filteredList.forEach(it => {
+                const c = getCategoryName(it.name) || "未分類";
+                it.category = currentLangMode === 'cn' ? toCN(c) : c;
+            });
+        }
+
+        window.processedList = filteredList;
+        updateStats(rawList.length, uniqueList.length, skipRuleCount, skipBlackCount, filteredList.length);
+        renderOutputs();
+    }
+
+    function updateStats(raw, unique, skipRule, skipBlack, finalCount) {
+        document.getElementById('rawCountSpan').innerText = `原始: ${raw}`;
+        document.getElementById('uniqueCountSpan').innerText = `去重: ${unique}`;
+        document.getElementById('skipCountSpan').innerText = `規則略過: ${skipRule}`;
+        document.getElementById('blackCountSpan').innerText = `黑名單剔除: ${skipBlack}`;
+        document.getElementById('finalCountSpan').innerText = `最終保留: ${finalCount}`;
+    }
+
+    function buildFormattedText(ext) {
+        const list = window.processedList || [];
+        if (!list.length) return "";
+
+        let m3u = "#EXTM3U\n";
+        let txt = "";
+        let currentGroup = null;
+
+        list.forEach(it => {
+            const catName = it.category || "未分類";
+            if (catName !== currentGroup) {
+                txt += `${catName},#genre#\n`;
+                currentGroup = catName;
+            }
+            txt += `${it.name},${it.url}\n`;
+            m3u += `#EXTINF:-1 group-title="${catName}",${it.name}\n${it.url}\n`;
+        });
+
+        return ext === 'm3u' ? m3u.trim() : txt.trim();
+    }
+
+    function renderOutputs() {
+        const tableBody = document.getElementById('resultTableBody');
+        const list = window.processedList || [];
+
+        // 渲染表格 (使用 DocumentFragment 確保數千筆依然秒開不卡頓)
+        tableBody.innerHTML = "";
+        const frag = document.createDocumentFragment();
+        const esc = t => String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+        list.forEach((it, idx) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="col-id">${idx + 1}</td>
+                <td><span class="badge-cat">${esc(it.category)}</span></td>
+                <td title="${esc(it.name)}">${esc(it.name)}</td>
+                <td title="${esc(it.url)}" style="font-family:Consolas,monospace; color:#555;">${esc(it.url)}</td>
+            `;
+            frag.appendChild(tr);
+        });
+        tableBody.appendChild(frag);
+
+        // 若目前在 TXT 或 M3U 文字預覽分頁，同步更新文字框
+        if (currentViewMode === 'txt') {
+            document.getElementById('outputArea').value = buildFormattedText('txt');
+        } else if (currentViewMode === 'm3u') {
+            document.getElementById('outputArea').value = buildFormattedText('m3u');
+        }
+    }
+
+    function switchResultView(mode) {
+        currentViewMode = mode;
+        document.getElementById('tabTableBtn').classList.toggle('active', mode === 'table');
+        document.getElementById('tabTxtBtn').classList.toggle('active', mode === 'txt');
+        document.getElementById('tabM3uBtn').classList.toggle('active', mode === 'm3u');
+
+        const tableView = document.getElementById('tableView');
+        const outputArea = document.getElementById('outputArea');
+
+        if (mode === 'table') {
+            tableView.style.display = 'block';
+            outputArea.style.display = 'none';
+        } else {
+            tableView.style.display = 'none';
+            outputArea.style.display = 'block';
+            outputArea.value = buildFormattedText(mode);
+        }
+    }
+
+    /* ================= 複製與下載 ================= */
+    async function copyResultText(ext) {
+        const content = buildFormattedText(ext);
+        if (!content) return alert("目前沒有可複製的結果！");
+        try {
+            await navigator.clipboard.writeText(content);
+            addLog(`已複製 ${ext.toUpperCase()} 格式內容 (${window.processedList.length} 個頻道)`, "success");
+        } catch (e) {
+            switchResultView(ext);
+            const out = document.getElementById('outputArea');
+            out.select();
+            document.execCommand('copy');
+            addLog(`已複製 ${ext.toUpperCase()} 格式內容`, "success");
+        }
+    }
+
+    function downloadFile(ext) {
+        const content = buildFormattedText(ext);
+        if (!content) return alert("無有效頻道資料可供下載！");
+        const ts = getFullTimestamp();
+        const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `IPTV_Result_${ts}.${ext}`;
+        a.click();
+        addLog(`下載成功: ${a.download} (共 ${window.processedList.length} 個頻道)`, "success");
+    }
+
+    /* ================= 失效黑名單管理 ================= */
+    function updateInvalidUI() {
+        document.getElementById('invalidCountHeader').innerText = `🚫 黑名單記憶: ${invalidSet.size} 筆`;
+    }
+
+    function loadInvalidData() {
+        const saved = localStorage.getItem('iptv_invalid_urls');
+        if (saved) {
+            try { invalidSet = new Set(JSON.parse(saved)); }
+            catch (e) { invalidSet = new Set(); }
+        }
+        updateInvalidUI();
+    }
+
+    function saveInvalidToStorage() {
+        localStorage.setItem('iptv_invalid_urls', JSON.stringify([...invalidSet]));
+        updateInvalidUI();
+    }
+
+    function exportInvalidUrls() {
+        if (invalidSet.size === 0) return alert("目前黑名單記憶庫為空！");
+        const blob = new Blob([JSON.stringify([...invalidSet], null, 2)], { type: "application/json" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `invalid_urls_${getFullTimestamp()}.json`;
+        a.click();
+        addLog(`已導出黑名單共 ${invalidSet.size} 筆`, "success");
+    }
+
+    function triggerManualImport() {
+        const t = document.createElement('input');
+        t.type = 'file';
+        t.accept = '.json';
+        t.onchange = e => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = ev => {
+                try {
+                    const list = JSON.parse(ev.target.result);
+                    if (Array.isArray(list)) {
+                        list.forEach(u => invalidSet.add(u));
+                        saveInvalidToStorage();
+                        addLog(`成功導入黑名單，目前庫存共 ${invalidSet.size} 筆`, "success");
+                        runProcess();
+                    } else {
+                        alert("JSON 格式不正確 (需為網址陣列)");
+                    }
+                } catch {
+                    alert("JSON 檔案解析失敗");
+                }
+            };
+            reader.readAsText(file);
+        };
+        t.click();
+    }
+
+    function clearInvalidData() {
+        if (confirm("確定要清空黑名單記憶庫嗎？")) {
+            invalidSet.clear();
+            saveInvalidToStorage();
+            addLog("黑名單記憶庫已清空。", "warning");
+            runProcess();
+        }
+    }
+
+    /* ================= 狀態儲存與重置 ================= */
+    function saveOptions() {
+        localStorage.setItem('iptv_opt_tw', document.getElementById('autoTW').checked);
+        localStorage.setItem('iptv_opt_fix', document.getElementById('fixLines').checked);
+        localStorage.setItem('iptv_opt_rule', document.getElementById('useRulesFilter').checked);
+        localStorage.setItem('iptv_opt_black', document.getElementById('useBlacklist').checked);
+        localStorage.setItem('iptv_opt_append', document.getElementById('appendMode').checked);
+    }
+
+    function loadOptions() {
+        document.getElementById('autoTW').checked = localStorage.getItem('iptv_opt_tw') !== 'false';
+        document.getElementById('fixLines').checked = localStorage.getItem('iptv_opt_fix') !== 'false';
+        document.getElementById('useRulesFilter').checked = localStorage.getItem('iptv_opt_rule') !== 'false';
+        document.getElementById('useBlacklist').checked = localStorage.getItem('iptv_opt_black') !== 'false';
+        document.getElementById('appendMode').checked = localStorage.getItem('iptv_opt_append') === 'true';
+    }
+
+    function saveSessionData() {
+        try {
+            localStorage.setItem('iptv_last_source', document.getElementById('sourceArea').value);
+            localStorage.setItem('iptv_last_url', document.getElementById('urlInput').value);
+        } catch (e) {
+            // 內容過大超出 localStorage 配額時，不影響後續處理
+            try { localStorage.removeItem('iptv_last_source'); } catch (_) {}
+        }
+    }
+
+    function loadSessionData() {
+        document.getElementById('sourceArea').value = localStorage.getItem('iptv_last_source') || "";
+        document.getElementById('urlInput').value = localStorage.getItem('iptv_last_url') || "";
+    }
+
+    function clearAll() {
+        if (confirm("確定要清除所有編輯區資料與設定嗎？")) {
+            document.getElementById('sourceArea').value = "";
+            document.getElementById('urlInput').value = "";
+            document.getElementById('outputArea').value = "";
+            document.getElementById('resultTableBody').innerHTML = "";
+            window.processedList = [];
+            localStorage.removeItem('iptv_last_source');
+            localStorage.removeItem('iptv_last_url');
+            updateStats(0, 0, 0, 0, 0);
+            addLog("已清除工作區所有資料。", "warning");
+        }
+    }
+</script>
+</body>
+</html>
