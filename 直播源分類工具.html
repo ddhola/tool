@@ -1,0 +1,1633 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>直播源分類工具</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.jsdelivr.net/npm/opencc-js@1.0.5/dist/umd/full.js"></script>
+    <style>
+        :root {
+            --primary: #1a73e8;
+            --purple: #8e44ad;
+            --success: #1e8e3e;
+            --warning: #f9ab00;
+            --error: #d93025;
+            --orange: #e67e22;
+            --dark: #202124;
+            --dark-grey: #34495e;
+            --bg: #f4f6f8;
+            --border: #dadce0;
+        }
+        * { box-sizing: border-box; }
+        body, html {
+            font-family: "Segoe UI", "Microsoft JhengHei", "Noto Sans TC", sans-serif;
+            margin: 0; padding: 0;
+            background: var(--bg);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            color: var(--dark);
+        }
+        header {
+            background: white;
+            padding: 0 18px;
+            height: 52px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+            z-index: 100;
+            flex-shrink: 0;
+        }
+        .logo {
+            font-size: 1.12rem;
+            font-weight: bold;
+            color: var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.78rem;
+            background: #f1f3f4;
+            padding: 4px 10px;
+            border-radius: 20px;
+            color: #444;
+            font-weight: normal;
+        }
+        .status-dot { width: 9px; height: 9px; border-radius: 50%; background: #ccc; }
+        .dot-green { background: var(--success); box-shadow: 0 0 5px var(--success); }
+        .dot-blue { background: var(--primary); box-shadow: 0 0 5px var(--primary); }
+        .dot-orange { background: var(--orange); box-shadow: 0 0 5px var(--orange); }
+
+        .header-actions { display: flex; align-items: center; gap: 8px; }
+        .diag-pill {
+            font-size: 0.78rem;
+            padding: 4px 10px;
+            border-radius: 6px;
+            cursor: pointer;
+            border: 1px solid var(--border);
+            background: #f8f9fa;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        main { display: flex; flex: 1; min-height: 0; overflow: hidden; }
+
+        /* 左側控制欄 */
+        .sidebar {
+            width: 325px;
+            background: white;
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            padding: 10px 12px;
+            overflow-y: auto;
+            flex-shrink: 0;
+            gap: 8px;
+        }
+        .card {
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 9px 11px;
+            flex-shrink: 0;
+        }
+        .card-title {
+            font-weight: bold;
+            margin-bottom: 7px;
+            font-size: 0.82rem;
+            color: var(--dark);
+            border-left: 4px solid var(--primary);
+            padding-left: 7px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .btn-group { display: flex; gap: 5px; margin-top: 5px; }
+        .btn-group button { flex: 1; }
+        .option-item {
+            display: flex;
+            align-items: flex-start;
+            font-size: 0.78rem;
+            margin-bottom: 5px;
+            cursor: pointer;
+            color: #333;
+            gap: 6px;
+            line-height: 1.35;
+        }
+        .option-item input { margin-top: 2px; }
+        #logPanel {
+            flex: 1;
+            min-height: 130px;
+            background: #1e272e;
+            color: #d2dae2;
+            border-radius: 6px;
+            padding: 8px 10px;
+            font-family: Consolas, monospace;
+            font-size: 11px;
+            overflow-y: auto;
+            line-height: 1.45;
+            border: 1px solid #485460;
+        }
+
+        /* 右側主工作區 */
+        .content-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 10px 12px;
+            gap: 8px;
+            min-width: 0;
+            overflow: hidden;
+        }
+        .top-io-row {
+            display: grid;
+            grid-template-columns: 1.35fr 1fr;
+            gap: 10px;
+            height: 70px;
+            flex-shrink: 0;
+        }
+        .url-bar {
+            display: flex;
+            gap: 8px;
+            background: white;
+            padding: 7px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            align-items: stretch;
+        }
+        #urlInput {
+            flex: 1;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            padding: 5px 8px;
+            outline: none;
+            font-family: Consolas, monospace;
+            resize: none;
+            font-size: 11.5px;
+        }
+        .drop-zone {
+            border: 2px dashed var(--primary);
+            background: rgba(26, 115, 232, 0.04);
+            text-align: center;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.82rem;
+            color: #555;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: 0.2s;
+            padding: 4px;
+        }
+        .drop-zone.highlight {
+            border-color: var(--success);
+            background: #e8f5e9;
+            color: var(--success);
+            font-weight: bold;
+        }
+
+        /* 操作工具列 */
+        .toolbar {
+            display: flex;
+            gap: 6px;
+            background: white;
+            padding: 7px 10px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+            flex-shrink: 0;
+        }
+        .stats-bar {
+            margin-left: auto;
+            display: flex;
+            gap: 10px;
+            font-size: 0.78rem;
+            font-weight: bold;
+            flex-wrap: wrap;
+        }
+
+        /* 篩選膠囊列 (Scope + Categories + Search) */
+        .filter-bar {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            background: white;
+            padding: 8px 10px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            flex-shrink: 0;
+        }
+        .filter-row {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .pill-btn {
+            background: #f1f3f4;
+            color: #444;
+            border: 1px solid var(--border);
+            border-radius: 99px;
+            padding: 3px 10px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            font-weight: normal;
+        }
+        .pill-btn.on {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+            font-weight: 600;
+        }
+        .search-input {
+            margin-left: auto;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 4px 10px;
+            font-size: 0.78rem;
+            width: 210px;
+            outline: none;
+        }
+        .search-input:focus { border-color: var(--primary); }
+
+        /* 雙欄編輯與預覽區 */
+        .editor-grid {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 1fr 1.35fr;
+            gap: 10px;
+            min-height: 0;
+        }
+        .editor-container {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            min-height: 0;
+            background: white;
+            padding: 9px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+        .panel-header {
+            font-size: 0.8rem;
+            font-weight: bold;
+            color: #2c3e50;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            min-height: 26px;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        textarea.editor {
+            flex: 1;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            padding: 10px;
+            font-family: 'Consolas', monospace;
+            font-size: 12px;
+            resize: none;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            line-height: 1.4;
+        }
+        .table-wrapper {
+            flex: 1;
+            background: white;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            overflow-y: auto;
+        }
+        table { width: 100%; border-collapse: collapse; font-size: 11.5px; table-layout: fixed; }
+        thead th {
+            position: sticky; top: 0;
+            background: #f8f9fa;
+            border-bottom: 2px solid var(--border);
+            padding: 7px 6px;
+            text-align: left;
+            z-index: 5;
+            color: #333;
+        }
+        tbody td {
+            padding: 5px 6px;
+            border-bottom: 1px solid #eee;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        tbody tr:hover { background: #f1f7ff; }
+        .col-id { width: 42px; text-align: center; color: #888; border-right: 1px solid #eee; }
+        .badge-cat {
+            background: #e8f0fe;
+            color: var(--primary);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10.5px;
+            font-weight: bold;
+        }
+        .badge-mod {
+            background: #e6f4ea;
+            color: var(--success);
+            border: 1px solid #ceead6;
+            padding: 1px 5px;
+            border-radius: 4px;
+            font-size: 10px;
+            font-weight: bold;
+            margin-left: 4px;
+        }
+        .badge-tvg {
+            background: #fef7e0;
+            color: #b06000;
+            padding: 1px 5px;
+            border-radius: 4px;
+            font-size: 10px;
+            margin-left: 4px;
+        }
+
+        /* 診斷與未保留清單視圖 */
+        .diag-view {
+            flex: 1;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            padding: 10px;
+            overflow-y: auto;
+            font-size: 12px;
+            background: #fafafa;
+            display: none;
+        }
+        .issue-bad { color: var(--error); margin-bottom: 3px; font-family: Consolas, monospace; }
+        .issue-warn { color: #b45309; margin-bottom: 3px; font-family: Consolas, monospace; }
+
+        /* 規則編輯器 Modal */
+        .modal-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 999;
+        }
+        .modal-box {
+            background: white;
+            width: 860px;
+            max-width: 94vw;
+            height: 82vh;
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+            padding: 16px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            gap: 10px;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: bold;
+            font-size: 1rem;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 8px;
+        }
+
+        /* 按鈕通用樣式 */
+        button {
+            padding: 5px 10px;
+            border: none;
+            border-radius: 5px;
+            color: white;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 0.78rem;
+            transition: opacity 0.15s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+        }
+        button:hover { opacity: 0.92; }
+        .btn-primary { background: var(--primary); }
+        .btn-purple { background: var(--purple); }
+        .btn-success { background: var(--success); }
+        .btn-orange { background: var(--orange); }
+        .btn-dark { background: var(--dark-grey); }
+        .btn-danger { background: var(--error); }
+        .btn-outline {
+            background: white;
+            color: #444;
+            border: 1px solid var(--border);
+            font-size: 0.75rem;
+        }
+        .btn-outline:hover { background: #f1f3f4; }
+        .tab-btn {
+            padding: 3px 9px;
+            font-size: 0.74rem;
+            border-radius: 4px;
+            border: 1px solid var(--border);
+            background: #f1f3f4;
+            color: #555;
+            cursor: pointer;
+        }
+        .tab-btn.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="logo">
+        📺 直播源分類工具
+        <span class="status-badge">
+            <span id="dot" class="status-dot dot-green"></span>
+            <span id="ruleStatus">內建 all_rules_fixed 已就緒</span>
+        </span>
+    </div>
+    <div class="header-actions">
+        <div class="diag-pill" onclick="switchResultView('diag')" title="點擊檢視格式診斷與未保留清單">
+            <span>🩺 格式檢驗:</span>
+            <span id="errBadge" style="color:var(--success); font-weight:bold;">錯誤 0</span> /
+            <span id="warnBadge" style="color:var(--success); font-weight:bold;">警告 0</span>
+        </div>
+        <span id="invalidCountHeader" style="font-size: 0.78rem; color: #666; background:#fff3e0; padding:4px 9px; border-radius:6px; border:1px solid #ffe0b2;">
+            🚫 黑名單庫: 0 筆
+        </span>
+        <button class="btn-danger" onclick="clearAll()">🗑️ 全部清除重置</button>
+    </div>
+</header>
+
+<main>
+    <!-- 左側控制欄 -->
+    <div class="sidebar">
+        <div class="card">
+            <div class="card-title">
+                <span>1. 6區塊規則引擎管理</span>
+                <button class="btn-outline" style="padding:2px 7px; font-size:0.7rem;" onclick="openRuleModal()">✏️ 編輯規則</button>
+            </div>
+            <div class="btn-group">
+                <button class="btn-outline" onclick="resetToBuiltinRules()" title="載入內建的 all_rules_fixed.txt">📌 內建修正版</button>
+                <button class="btn-outline" onclick="syncGithubRules()" title="從 GitHub 同步規則">🔄 雲端同步</button>
+                <button class="btn-outline" onclick="document.getElementById('ruleFileManual').click()">📂 載入檔案</button>
+            </div>
+            <input type="file" id="ruleFileManual" accept=".txt" style="display:none;" onchange="loadRuleManual(this)">
+        </div>
+
+        <div class="card">
+            <div class="card-title">2. 台灣 / MOD 語義分類設定</div>
+            <label class="option-item">
+                <input type="checkbox" id="optSpec" checked onchange="saveOptions(); runAnalyze();">
+                <span><b>更具體關鍵字優先 (Spec)</b><br><small style="color:#666;">後面分類若包含前面分類關鍵字則以後者為準</small></span>
+            </label>
+            <label class="option-item">
+                <input type="checkbox" id="optBuiltinTw" onchange="saveOptions(); runAnalyze();">
+                <span><b>同時保留內建台灣啟發式判斷</b><br><small style="color:#666;">除 KEEP_LIST 外，自動納入含台灣/MOD特徵台</small></span>
+            </label>
+            <label class="option-item">
+                <input type="checkbox" id="optKeepAll" onchange="saveOptions(); runAnalyze();">
+                <span><b>全數保留模式 (不刷除頻道)</b><br><small style="color:#666;">無視 KEEP_LIST 限制，僅執行分類與注音排序</small></span>
+            </label>
+        </div>
+
+        <div class="card">
+            <div class="card-title">3. 前處理與去重過濾設定</div>
+            <label class="option-item">
+                <input type="checkbox" id="autoTW" checked onchange="saveOptions()"> 自動轉台灣繁體 (OpenCC + 內建字庫)
+            </label>
+            <label class="option-item">
+                <input type="checkbox" id="fixLines" checked onchange="saveOptions()"> 自動修復斷行 (名稱與網址分開時自動合併)
+            </label>
+            <label class="option-item">
+                <input type="checkbox" id="strictUrlDedup" onchange="saveOptions(); runAnalyze();"> 嚴格單一網址去重 (勾選則不保留同網址不同名)
+            </label>
+            <label class="option-item">
+                <input type="checkbox" id="useBlacklist" checked onchange="saveOptions(); runAnalyze();"> 自動剔除黑名單記憶庫網址
+            </label>
+            <button class="btn-primary" style="width:100%; height:34px; margin-top:4px; font-size:0.82rem;" onclick="runAnalyze()">
+                ⚡ 重新分析、分類與注音排序
+            </button>
+        </div>
+
+        <div class="card">
+            <div class="card-title">4. 失效網址黑名單庫 (JSON)</div>
+            <div class="btn-group">
+                <button class="btn-outline" onclick="exportInvalidUrls()">📤 導出 JSON</button>
+                <button class="btn-outline" onclick="triggerManualImport()">📥 導入 JSON</button>
+                <button class="btn-outline" style="color:var(--error);" onclick="clearInvalidData()">🧹 清空</button>
+            </div>
+        </div>
+
+        <div class="card-title" style="margin-bottom:0; padding-left:4px;">SYSTEM LOG (系統紀錄)</div>
+        <div id="logPanel"></div>
+    </div>
+
+    <!-- 右側主工作區 -->
+    <div class="content-area">
+        <!-- 頂部輸入區 -->
+        <div class="top-io-row">
+            <div class="url-bar">
+                <textarea id="urlInput" placeholder="貼上遠端 M3U / TXT 網址 (每行一個，支援直連與雙 CORS 代理自動輪詢)..." oninput="saveSessionData()"></textarea>
+                <button class="btn-primary" style="width: 112px; flex-shrink:0;" onclick="batchFetchUrls()">🌐 批次強力讀取</button>
+            </div>
+            <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+                <div>📂 <strong>拖放多個 .m3u / .m3u8 / .txt 檔案至此</strong>，或點擊選取</div>
+                <div style="font-size:0.72rem; color:#777; margin-top:2px;">自動辨識 UTF-8 / GBK / Big5 編碼、修復斷行並保留 TVG 台標屬性</div>
+                <input type="file" id="fileInput" multiple accept=".m3u,.m3u8,.txt" hidden onchange="handleFiles(this.files)">
+            </div>
+        </div>
+
+        <!-- 快捷操作與匯出列 -->
+        <div class="toolbar">
+            <button class="btn-purple" onclick="pasteFromClipboard()">📋 剪貼簿貼上</button>
+            <button id="langBtn" class="btn-orange" onclick="toggleLanguage()">🔄 切換為簡體</button>
+            <button class="btn-success" onclick="copyResultText('txt')">📄 複製保留 TXT</button>
+            <button class="btn-success" onclick="copyResultText('m3u')">📄 複製保留 M3U</button>
+            <button class="btn-dark" onclick="downloadFile('txt')">⬇ 保留 TXT (含 other)</button>
+            <button class="btn-dark" onclick="downloadFile('m3u')">⬇ 保留 M3U (含 TVG)</button>
+            <button class="btn-outline" style="border-color:var(--orange); color:#b45309; font-weight:bold;" onclick="downloadUnclassifiedTxt()">📥 匯出未保留 TXT</button>
+
+            <div class="stats-bar">
+                <span style="color:#555;" id="statTotal">總解析: 0</span>
+                <span style="color:var(--success);" id="statKept">保留: 0 (MOD 0)</span>
+                <span style="color:var(--orange);" id="statUnkept">未保留: 0</span>
+                <span style="color:var(--primary);" id="statDedup">去重: 0</span>
+                <span style="color:var(--error);" id="statBlack">黑名單: 0</span>
+            </div>
+        </div>
+
+        <!-- 範圍與分類膠囊篩選列 -->
+        <div class="filter-bar">
+            <div class="filter-row">
+                <strong style="font-size:0.76rem; color:#555;">範圍:</strong>
+                <div id="scopePills" style="display:flex; gap:5px; flex-wrap:wrap;"></div>
+                <input type="text" id="searchInput" class="search-input" placeholder="🔍 搜尋頻道名稱或分組..." oninput="renderAllViews()">
+            </div>
+            <div class="filter-row" id="catPills"></div>
+        </div>
+
+        <!-- 雙欄編輯與預覽區 -->
+        <div class="editor-grid">
+            <!-- 左欄：原始碼編輯器 -->
+            <div class="editor-container">
+                <div class="panel-header">
+                    <span>SOURCE CONTENT (原始內容 / 支援直接貼上與即時修改)</span>
+                    <button class="btn-outline" style="padding:2px 8px; font-size:0.7rem;" onclick="formatSourceInput()">✨ 手動斷行修復與繁體化</button>
+                </div>
+                <textarea id="sourceArea" class="editor" placeholder="貼上 M3U 或 TXT 內容 (每行: 頻道名,網址；支援 #EXTINF 與 #genre#)..." oninput="onSourceInput()"></textarea>
+            </div>
+
+            <!-- 右欄：多視圖預覽區 -->
+            <div class="editor-container">
+                <div class="panel-header">
+                    <span id="rightPanelTitle">CONVERTED RESULT (已篩選顯示: 0 筆)</span>
+                    <div style="display:flex; gap:4px; flex-wrap:wrap;">
+                        <button id="tabTableBtn" class="tab-btn active" onclick="switchResultView('table')">📊 頻道列表</button>
+                        <button id="tabTxtBtn" class="tab-btn" onclick="switchResultView('txt')">📝 保留 TXT</button>
+                        <button id="tabM3uBtn" class="tab-btn" onclick="switchResultView('m3u')">📝 保留 M3U</button>
+                        <button id="tabUnkeptBtn" class="tab-btn" onclick="switchResultView('unkept')">🚫 未保留 TXT</button>
+                        <button id="tabDiagBtn" class="tab-btn" onclick="switchResultView('diag')">🩺 格式診斷</button>
+                    </div>
+                </div>
+
+                <!-- 視圖 1：表格 -->
+                <div id="tableView" class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th class="col-id">#</th>
+                                <th style="width:20%">分類群組</th>
+                                <th style="width:34%">頻道名稱與屬性</th>
+                                <th style="width:46%">播放地址</th>
+                            </tr>
+                        </thead>
+                        <tbody id="resultTableBody"></tbody>
+                    </table>
+                </div>
+
+                <!-- 視圖 2：純文字預覽 (TXT / M3U / 未保留 TXT) -->
+                <textarea id="outputArea" class="editor" style="display:none;" readonly placeholder="轉換後的結果將顯示於此..."></textarea>
+
+                <!-- 視圖 3：格式診斷與明細 -->
+                <div id="diagView" class="diag-view"></div>
+            </div>
+        </div>
+    </div>
+</main>
+
+<!-- 規則編輯 Modal -->
+<div id="ruleModal" class="modal-backdrop">
+    <div class="modal-box">
+        <div class="modal-header">
+            <span>⚙️ 分類規則編輯器 (支援 KEEP / OVERRIDE / PREFIX / CATEGORY / SORT / EXCLUDE 6大區塊)</span>
+            <button class="btn-outline" onclick="closeRuleModal()">✖ 關閉</button>
+        </div>
+        <div style="font-size:0.78rem; color:#555;">
+            提示：修改後點擊「儲存並立即套用」即會寫入本地快取並重新分類；點擊「還原內建預設」可恢復為 <code>all_rules_fixed.txt</code>。
+        </div>
+        <textarea id="rulesEditor" class="editor" style="background:#1e1e1e; color:#e8eaed; font-size:12px;" spellcheck="false"></textarea>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+            <button class="btn-orange" onclick="resetToBuiltinRules(true)">🔄 還原內建 all_rules_fixed.txt</button>
+            <div style="display:flex; gap:8px;">
+                <button class="btn-outline" onclick="exportRulesTxt()">📥 下載目前規則 (.txt)</button>
+                <button class="btn-primary" style="padding:6px 18px;" onclick="saveAndApplyRulesFromModal()">💾 儲存並立即套用</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    /* ================= 1. 內建規則庫與繁簡字典 ================= */
+    const BUILTIN_RULES_TXT = "[KEEP_LIST]\namc\nAnimax\nARIRANG\nAXN\nearth\nBBC Lifestyle\nCATCHPLAY\nCHC\nCinemaWorld\nCINEMAX\nCLASSICA 古典樂\nCN卡通\nDAZN\nDMAX\nDISCOVERY\nDreamWorks\nELEVEN\nELTA\nEye 旅遊\nEye 戲劇\nFocus風采\nFocus歡樂\nHami\nHBO\nHistory\nHITS\nHollywood Movies\nJET\nMEZZO LIVE\nMOMO\nMTV Live\nmuch\nMy Cinema Europe\nNick Jr.\nSMART\nTAiwan Plus\nTaiwan+\nTLC\nTVBS\nZ頻道\n超視\n人間衛視\n八大\n三立\n大立\n大愛\n中天\n中視\n中廣\n互動英語頻道\n公視\n天良\n天映\n古典音樂臺\n尼克\n布袋戲\n民視\n生活英語臺\n生活旅遊\n生活時尚\n宇寰\n寰宇\n年代\n我的歐洲電影\n車迷TV\n亞太\n亞洲美食\n亞洲旅遊\n亞洲電臺 FM.\n東森\n知識臺\n阿里郎頻道\n非凡\n信大\n信吉\n客家\n飛揚電臺\n飛碟電臺\n高點\n動物星球\n愛爾達\n國會\n國興\n採昌\n探索\n博斯\n壹新\n壹電\n智林\n華納\n華視\n視納\n罪案偵查\n靖天\n靖洋\n夢工廠動畫\n滾動力\n臺視\n臺灣\n影迷\n緯來\n衛視中文\n龍祥\n龍翔\n龍華\n鏡新\nhappy\n松視\n極限\n香蕉\n彩虹\n驚豔\n潘多\n潘朵\n驚艷\nJstar\n精豔\nLOOK\nChannel V\ni-Fun動漫\n達文西\nYOYO\nPET CLUB\n采昌\n豬哥\n好消息\n華藏\n正德\n唯心\n生命電視\n佛衛\n創世電視\n誠心電視\n城市電視\n第一名電視\n新時代\n大陸尋奇\n華藝\n法國時尚\n法國時裝\n美好購物\n購物\n龍翔時代\nNickj\n美食星球\n美亞電影\n好萊塢電影\n韓國娛樂\nEYE TV\n鏡電\n第1商業\nCNBC\nSBN\nBloomberg\n倪珍\nGINX\nTRACE\n戲劇免費\n經典電影\n電影原聲\nROCK\n經典卡通\n精選動漫\nELTV\n生活英語\nTrekker\nLifetime\n幸福空間\nLoveNature\nLUXE\nDW德國之聲\nVOA美國之音\n原住民\n時尚運動X\n罪案侦查\nET綜合台\n好莱坞電影台\n猪哥亮\n國家地理\nJET\n\n\n[OVERRIDE_LIST]\n戲劇,#genre#\n戲劇\n\n18,#genre#\n彩虹\n\n電影,#genre#\n經典電影\n電影原聲\nROCK\n\n兒童,#genre#\n經典卡通\n精選動漫\n\n音樂旅遊生活,#genre#\nLifetime\nLUXE\n\n[PREFIX_LIST]\n四臺,#genre#\n華視\n中視\n台視\n民視\n公視\n!新聞臺\n\n[CATEGORY_LIST]\n新聞臺,#genre#\n新聞\n財經\n寰宇\n東森LIVE\n商業\n中天CTI+\niNews\nERA NEWS\nTaiwan Plus\nTaiwan+\n華視教育\n三立LIVE\n鏡電\nBloomberg\nCNBC\nSBN\n倪珍\n德國之聲\n美國之音\n\n體育,#genre#\n體育\n運動\n博斯\nNBA\nDAZN\nELTA1\nELTA2\nELTA3\nELTA4\n愛爾達\n愛爾達體育1台\n愛爾達體育2台\n愛爾達體育3台\n愛爾達體育4台\n愛爾達體育 一\n愛爾達體育 二\n愛爾達體育 三\n愛爾達體育 四\nEleven\nZ頻道\nsport\nHami\nMOMO綜合\n\n四臺,#genre#\n華視\n中視\n臺視\n民視\n公視\n\n綜合臺1,#genre#\n國興\n綜合\n綜藝\n育樂\n日本\n超視\nsmart\nmuch\nTVBS\nMOMO TV\n精彩\n精采\n\n綜合臺2,#genre#\ntaiwan\n娛樂\n歡樂\n菁采\n經典\n民視第一\n民視臺灣\n三立臺灣\n三立都會\n三立綜合\n八大第一\n八大精彩\n中天亞洲\n資訊\n國際\n衛視中文\n霹靂\n金光\n布袋戲\n東森衛視\n東森美洲\n東風衛視\n法國時尚\n菁彩\n東森亞洲\n豬哥\n法國時裝\nET綜合台\n猪哥亮\nJET\n\n戲劇,#genre#\n戲劇\n台劇\n偶像\n影劇\n日韓\n\n電影,#genre#\nAXN\namc\ncatch\nhbo\nhits\nmovies\nhollywood\ncinema\n電影\n西片\n洋片\n罪案\n映畫\n龍祥時代\n影院\n龍翔時代\n罪案侦查\n\n兒童,#genre#\nyoyo\n幼幼\n卡通\n兒童\n親子\n達文西\n尼克\nanimax\ndreamworks\nnick\n動漫\ni-Fun\n\n音樂旅遊生活,#genre#\nChannel V\n[V]\n旅遊\n美食\nTLC\nLifetime\nLifestyle\nHistory\n生活時尚\n居家\n英語\nMTV\n古典\nMusic\nMezzo\nPET CLUB\n寵物\nFood\n音樂\nUrban\nTrekker\n生活英語\n幸福空間\n\n探索,#genre#\n紀實\nCHANNEL\ntravel\nDMAX\n歷史\n地理\n探索\n求索\n動物\nDISCOVERY\nearth\nnature\nLoveNature\nrollor\n動力\n國家地理\n\n宗教,#genre#\n宗教\n大愛\n好消息\n華藏\n正德\n唯心\n生命電視\n佛衛\n慈悲\n人間衛視\n創世\n佛教\n佛光\n慈濟\n基督\n福音\n\n購物,#genre#\n購物\n\nother,#genre#\n\n\n18,#genre#\nhappy\n松視\n極限\n香蕉\n彩虹\n驚豔\n潘多\n潘朵\n驚艷\nJstar\n精豔\n\n[SORT_LIST]\n新聞臺,#genre#\nTVBS\n東森\n華視\n中視\n臺視\n民視\n公視\n年代\n三立\n中天\n寰宇\n非凡\n壹新\n壹電\n鏡電\n鏡新\n\n體育,#genre#\nMoMo\n緯來\nDAZN\nELEVEN\nELTA\n愛爾達\n愛爾達體育1台\n愛爾達體育2台\n愛爾達體育3台\n愛爾達體育4台\n愛爾達體育 一\n愛爾達體育 二\n愛爾達體育 三\n愛爾達體育 四\n\n四臺,#genre#\n華視\n中視\n台視\n民視\n公視\n\n綜合臺1,#genre#\nMoMo\n國興\n緯來日本\n緯來\n超視\n東森超視\nTVBS\nMUCH\nELTA\n東森\n中天\n八大\n三立\n靖天\n龍華\n\n綜合臺2,#genre#\n三立綜合\n三立台灣\n三立都會\n\n[EXCLUDE_LIST]\nTVB明珠\nTVB翡翠\nTVB plus\nTVBJ\nTVBE\nTVB功夫\nTVB星河\nTVB直播\nTVB亞洲\nTVB粵語\nTVB經典\nTVB1\nTVB DRAMA\n鳳凰\nHOY\nNOWTV\nViu\nHKIBC\n香港\n港台\n紅牛\n";
+    const S2T_PAIRS = "红紅 绿綠 视視 卫衛 东東 华華 湾灣 综綜 电電 体體 财財 经經 纪紀 录錄 儿兒 动動 购購 乐樂 戏戲 剧劇 频頻 国國 爱愛 尔爾 达達 纬緯 来來 龙龍 民民 大大 闻聞 新新 业業 商商 运運 网網 高高 亲親 影影 韩韓 陆陸 艺藝 欢歡 经經 典典 洋洋 时時 尚尚 旅旅 游遊 动動 历歷 史史 学學 识識 宗宗 济濟 灵靈 万萬 与與 专專 丝絲 两兩 严嚴 个個 临臨 为為 习習 书書 买買 乱亂 争爭 于於 云雲 亚亞 产產 亿億 从從 仓倉 们們 价價 众眾 优優 会會 伟偉 传傳 伤傷 伦倫 余餘 侠俠 债債 倾傾 储儲 党黨 兰蘭 关關 兴興 养養 兽獸 内內 册冊 写寫 军軍 农農 冲衝 决決 况況 冻凍 净淨 凉涼 减減 凤鳳 击擊 划劃 刘劉 则則 刚剛 创創 删刪 别別 剑劍 劝勸 办辦 务務 励勵 劲勁 劳勞 势勢 勋勳 医醫 厂廠 压壓 厅廳 县縣 参參 双雙 发發 变變 叙敘 叶葉 号號 叹嘆 后後 听聽 启啟 员員 响響 团團 园園 围圍 图圖 圆圓 圣聖 场場 坏壞 块塊 坚堅 坛壇 声聲 处處 备備 够夠 头頭 夸誇 夹夾 夺奪 奋奮 奖獎 妇婦 妈媽 娱娛 孙孫 宁寧 宠寵 审審 宪憲 宫宮 宽寬 实實 宾賓 对對 寻尋 导導 将將 尘塵 尝嘗 尽盡 层層 属屬 岁歲 岛島 岭嶺 币幣 师師 带帶 帮幫 并並 广廣 庄莊 庆慶 库庫 应應 废廢 开開 异異 张張 弹彈 强強 归歸 当當 彻徹 径徑 忆憶 忧憂 怀懷 态態 总總 恋戀 恶惡 悬懸 惊驚 惯慣 战戰 户戶 执執 扩擴 扫掃 扬揚 抢搶 护護 报報 担擔 拥擁 择擇 挂掛 挡擋 挤擠 损損 换換 据據 摄攝 摆擺 敌敵 数數 断斷 无無 旧舊 显顯 晋晉 晓曉 暂暫 术術 机機 杀殺 杂雜 权權 条條 杨楊 极極 构構 枪槍 标標 样樣 桥橋 梦夢 检檢 楼樓 欧歐 气氣 汉漢 汤湯 沟溝 没沒 沧滄 洁潔 浅淺 浓濃 涛濤 润潤 涨漲 温溫 满滿 滚滾 滨濱 灭滅 灯燈 灾災 点點 炼煉 烟煙 热熱 爷爺 牵牽 犹猶 独獨 狮獅 猎獵 献獻 环環 现現 琼瓊 画畫 疗療 监監 盘盤 码碼 础礎 确確 离離 种種 积積 称稱 稳穩 穷窮 竞競 笔筆 笼籠 简簡 粮糧 级級 约約 纯純 纲綱 纳納 纵縱 纸紙 线線 练練 组組 细細 织織 终終 结結 绘繪 给給 络絡 绝絕 统統 继繼 续續 缓緩 编編 缩縮 罗羅 罚罰 耻恥 职職 联聯 聪聰 肃肅 肤膚 胜勝 脑腦 脚腳 脸臉 舰艦 节節 苏蘇 荐薦 获獲 营營 药藥 萨薩 蓝藍 虑慮 虽雖 虾蝦 补補 装裝 见見 观觀 规規 览覽 觉覺 计計 订訂 认認 讨討 让讓 训訓 议議 讯訊 记記 讲講 许許 论論 设設 访訪 证證 评評 诉訴 诗詩 话話 该該 详詳 语語 误誤 说說 请請 诸諸 读讀 课課 谁誰 调調 谈談 谊誼 谋謀 谢謝 谱譜 贝貝 负負 责責 败敗 货貨 质質 贯貫 贵貴 贸貿 费費 贺賀 资資 赏賞 赖賴 赛賽 赞贊 赵趙 趋趨 跃躍 践踐 车車 轨軌 转轉 轮輪 软軟 轻輕 载載 较較 辅輔 辆輛 辉輝 输輸 边邊 迁遷 过過 还還 这這 进進 远遠 连連 迟遲 选選 递遞 邮郵 邻鄰 郑鄭 释釋 针針 钟鐘 钢鋼 钱錢 铁鐵 铜銅 银銀 链鏈 锁鎖 锋鋒 镇鎮 镜鏡 长長 门門 闪閃 问問 闭閉 间間 闲閒 闷悶 闹鬧 阅閱 队隊 阳陽 阴陰 阵陣 阶階 际際 陈陳 险險 随隨 隐隱 难難 雾霧 静靜 韩韓 页頁 顶頂 项項 顺順 须須 顾顧 顿頓 颁頒 预預 领領 颜顏 题題 额額 风風 飞飛 饭飯 饮飲 饰飾 馆館 驱驅 驶駛 驻駐 驾駕 骑騎 验驗 骄驕 鱼魚 鲜鮮 鸟鳥 鸡雞 鸭鴨 鸿鴻 鹏鵬 鹰鷹 麦麥 黄黃 齐齊 龟龜 栏欄 汇匯 灿燦 钓釣 铃鈴 鲁魯 鹤鶴 鲸鯨 乡鄉 兑兌 冯馮 鸣鳴 鸽鴿 壮壯 妆妝 岗崗 帜幟 帘簾 弥彌 恳懇 愿願 懒懶 扑撲 抚撫 拟擬 拨撥 挥揮 捡撿 摇搖 枣棗 柜櫃 栋棟 档檔 椭橢 殡殯 毕畢 洒灑 浏瀏 渐漸 渔漁 炉爐 烛燭 烦煩 状狀 猫貓 玛瑪 盏盞 盖蓋 盐鹽 矿礦 稣穌 窑窯 竖豎 绑綁 绩績 绪緒 缘緣 缴繳 罢罷 肠腸 艳豔 蒋蔣 蛮蠻 衔銜 袭襲 觅覓 诊診 诞誕 诱誘 贤賢 账賬 赢贏 踪蹤 辈輩 辑輯 辞辭 辩辯 迹跡 适適 邓鄧 钞鈔 钻鑽 铺鋪 销銷 锅鍋 锐銳 键鍵 闯闖 阀閥 陕陝 隶隸 韵韻 顽頑 颂頌 颗顆 馈饋 骂罵 骗騙 鲤鯉 鸦鴉 齿齒";
+    const GITHUB_RULE_URL = "https://raw.githubusercontent.com/ddhola/tool/refs/heads/main/all_rules.txt";
+
+    // 建立內建輕量 S2T 字典 (離線雙保險)
+    const S2T_MAP = (() => {
+        const m = {};
+        S2T_PAIRS.split(/\s+/).forEach(p => {
+            if (p.length === 2 && p[0] !== p[1]) m[p[0]] = p[1];
+        });
+        return m;
+    })();
+    const builtinS2T = t => String(t || "").replace(/[\u4e00-\u9fff]/g, ch => S2T_MAP[ch] || ch);
+
+    // OpenCC 轉換器 (若 CDN 載入成功則優先結合使用)
+    const openccToTW = (typeof OpenCC !== "undefined") ? OpenCC.Converter({ from: 'cn', to: 'twp' }) : builtinS2T;
+    const openccToCN = (typeof OpenCC !== "undefined") ? OpenCC.Converter({ from: 'tw', to: 'cn' }) : (t => t);
+    const toTW = t => builtinS2T(openccToTW(String(t || "")));
+    const toCN = t => openccToCN(String(t || ""));
+
+    // 內建台灣啟發式關鍵字與 MOD 正則
+    const TW_KW = ["台視","中視","華視","民視","公視","三立","東森","TVBS","中天","年代","非凡","壹電視","寰宇","緯來","龍華","八大","福斯","大愛","客家","原住民","好消息","華藏","愛爾達","Momo","靖天","超視","台灣","台湾","Taiwan","iNEWS","ELTA","CTi","CTV","TTV","CTS","FTV","PTS","SET","GTV","EBC","ETtoday","ELEVEN","博斯","Hito","龍祥","天良","衛視中文","澳亞","國家地理","Discovery","HBO","Cinemax","AXN","東森洋片","好萊塢","viva","LINE TV","國興","信吉","Lifetime","中華電信","MOD"];
+    const MOD_RE = /(\bMOD\b|中華電信|hinet|cht\.com\.tw)/i;
+
+    // 台灣注音排序器
+    let COLL;
+    try {
+        COLL = new Intl.Collator("zh-Hant-TW-u-co-zhuyin", { numeric: true, sensitivity: "base" });
+    } catch (e) {
+        COLL = new Intl.Collator("zh-Hant", { numeric: true });
+    }
+
+    /* ================= 2. 全域狀態變數 ================= */
+    let RULES = { keep: [], cats: [], sort: {}, over: [], excl: [], pre: [] };
+    let invalidSet = new Set();
+    let ALL_CHANNELS = [];
+    let ISSUES = [];
+    let scopeFilter = "all"; // 'all', 'tv', 'mod'
+    let catFilter = "全部";
+    let currentLangMode = "tw"; // 'tw', 'cn'
+    let currentViewMode = "table"; // 'table', 'txt', 'm3u', 'unkept', 'diag'
+    let statsMeta = { convCount: 0, dupCount: 0, blackSkipCount: 0 };
+
+    window.onload = () => {
+        loadOptions();
+        loadInvalidData();
+        initRulesOnStartup();
+        loadSessionData();
+        setupDragAndDrop();
+        if (document.getElementById('sourceArea').value.trim()) {
+            runAnalyze();
+        }
+        addLog("系統就緒：已載入 6 區塊高階語義引擎與台灣注音排序器。", "success");
+    };
+
+    /* ================= 3. 系統紀錄與輔助函式 ================= */
+    function addLog(msg, type = "info") {
+        const p = document.getElementById('logPanel');
+        const d = document.createElement("div");
+        if (type === "success") d.style.color = "#81c995";
+        else if (type === "warning") d.style.color = "#f9ab00";
+        else if (type === "error") d.style.color = "#f28b82";
+        else if (type === "primary") d.style.color = "#74b9ff";
+        const now = new Date().toLocaleTimeString('zh-TW', { hour12: false });
+        d.textContent = `[${now}] ${msg}`;
+        p.appendChild(d);
+        p.scrollTop = p.scrollHeight;
+    }
+
+    function setRuleStatusUI(cls, text) {
+        document.getElementById('dot').className = "status-dot " + cls;
+        document.getElementById('ruleStatus').innerText = text;
+    }
+
+    function esc(s) {
+        return String(s || "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+    }
+
+    function getFullTimestamp() {
+        const n = new Date();
+        return n.getFullYear() +
+               String(n.getMonth() + 1).padStart(2, '0') +
+               String(n.getDate()).padStart(2, '0') +
+               String(n.getHours()).padStart(2, '0') +
+               String(n.getMinutes()).padStart(2, '0') +
+               String(n.getSeconds()).padStart(2, '0');
+    }
+
+    /* ================= 4. 正規化與 6 區塊規則解析引擎 ================= */
+    // 深度正規化：簡轉繁 + NFKC + 異體字歸一 (臺→台, 采→採, 艷→豔) + 去空白 + 小寫
+    function nrm(t) {
+        return toTW(String(t || ""))
+            .normalize("NFKC")
+            .replace(/臺/g, "台")
+            .replace(/采/g, "採")
+            .replace(/艷/g, "豔")
+            .replace(/\s+/g, "")
+            .toLowerCase();
+    }
+
+    function parseRulesText(txt) {
+        const R = { keep: [], cats: [], sort: {}, over: [], excl: [], pre: [] };
+        let sec = "", cur = null;
+        String(txt || "").replace(/\r/g, "").split("\n").forEach(raw => {
+            const l = raw.trim();
+            if (!l || l.startsWith("#")) return;
+            const h = l.match(/^\[(KEEP_LIST|CATEGORY_LIST|SORT_LIST|OVERRIDE_LIST|EXCLUDE_LIST|PREFIX_LIST)\]$/i);
+            if (h) {
+                sec = h[1].toUpperCase();
+                cur = null;
+                return;
+            }
+            if (sec === "KEEP_LIST") {
+                const k = nrm(l);
+                if (k) R.keep.push(k);
+                return;
+            }
+            if (sec === "EXCLUDE_LIST") {
+                const k = nrm(l);
+                if (k) R.excl.push(k);
+                return;
+            }
+            const g = l.match(/^(.+?),\s*#genre#\s*$/i);
+            if (g) {
+                const name = g[1].trim();
+                if (sec === "CATEGORY_LIST") { cur = { name, kws: [] }; R.cats.push(cur); }
+                else if (sec === "OVERRIDE_LIST") { cur = { name, kws: [] }; R.over.push(cur); }
+                else if (sec === "PREFIX_LIST") { cur = { name, kws: [], exc: [] }; R.pre.push(cur); }
+                else if (sec === "SORT_LIST") { cur = { name, kws: R.sort[name] || (R.sort[name] = []) }; }
+                else cur = null;
+                return;
+            }
+            if (cur) {
+                if (l[0] === "!" && cur.exc) {
+                    cur.exc.push(l.slice(1).trim());
+                    return;
+                }
+                const k = nrm(l);
+                if (k) cur.kws.push(k);
+            }
+        });
+        R.keep = [...new Set(R.keep)];
+        return R;
+    }
+
+    function initRulesOnStartup() {
+        const savedCustom = localStorage.getItem('iptv_v5_rules_cache');
+        const ruleTxt = savedCustom || BUILTIN_RULES_TXT;
+        document.getElementById('rulesEditor').value = ruleTxt;
+        RULES = parseRulesText(ruleTxt);
+        if (savedCustom) {
+            setRuleStatusUI("dot-blue", `自訂/快取規則 (KEEP:${RULES.keep.length} / 分類:${RULES.cats.length})`);
+        } else {
+            setRuleStatusUI("dot-green", `內建 all_rules_fixed (KEEP:${RULES.keep.length} / 分類:${RULES.cats.length})`);
+        }
+    }
+
+    function resetToBuiltinRules(fromModal = false) {
+        localStorage.removeItem('iptv_v5_rules_cache');
+        document.getElementById('rulesEditor').value = BUILTIN_RULES_TXT;
+        RULES = parseRulesText(BUILTIN_RULES_TXT);
+        setRuleStatusUI("dot-green", `內建 all_rules_fixed (KEEP:${RULES.keep.length} / 分類:${RULES.cats.length})`);
+        addLog("已載入內建 all_rules_fixed.txt 規則。", "success");
+        runAnalyze();
+        if (fromModal) closeRuleModal();
+    }
+
+    async function syncGithubRules() {
+        setRuleStatusUI("dot-orange", "正在同步 GitHub 規則...");
+        try {
+            const res = await fetch(GITHUB_RULE_URL, { cache: "no-store" });
+            if (!res.ok) throw new Error("HTTP " + res.status);
+            const text = await res.text();
+            localStorage.setItem('iptv_v5_rules_cache', text);
+            document.getElementById('rulesEditor').value = text;
+            RULES = parseRulesText(text);
+            setRuleStatusUI("dot-green", `雲端規則同步成功 (KEEP:${RULES.keep.length})`);
+            addLog(`成功從 GitHub 同步規則 (保留:${RULES.keep.length} 條, 分類:${RULES.cats.length} 組)`, "success");
+            runAnalyze();
+        } catch (e) {
+            addLog("GitHub 規則同步失敗，維持目前規則。", "error");
+            setRuleStatusUI("dot-blue", `維持現有規則 (KEEP:${RULES.keep.length})`);
+        }
+    }
+
+    function loadRuleManual(input) {
+        const file = input.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = e => {
+            const text = e.target.result;
+            localStorage.setItem('iptv_v5_rules_cache', text);
+            document.getElementById('rulesEditor').value = text;
+            RULES = parseRulesText(text);
+            setRuleStatusUI("dot-blue", `手動規則: ${file.name} (KEEP:${RULES.keep.length})`);
+            addLog(`已載入本地規則檔: ${file.name}`, "success");
+            runAnalyze();
+        };
+        reader.readAsText(file, "utf-8");
+    }
+
+    function openRuleModal() {
+        document.getElementById('ruleModal').style.display = 'flex';
+    }
+    function closeRuleModal() {
+        document.getElementById('ruleModal').style.display = 'none';
+    }
+    function saveAndApplyRulesFromModal() {
+        const txt = document.getElementById('rulesEditor').value;
+        localStorage.setItem('iptv_v5_rules_cache', txt);
+        RULES = parseRulesText(txt);
+        setRuleStatusUI("dot-blue", `自訂規則已套用 (KEEP:${RULES.keep.length} / 分類:${RULES.cats.length})`);
+        addLog(`規則修改已套用 (KEEP:${RULES.keep.length}, OVERRIDE:${RULES.over.length}, PREFIX:${RULES.pre.length}, EXCLUDE:${RULES.excl.length})`, "success");
+        closeRuleModal();
+        runAnalyze();
+    }
+    function exportRulesTxt() {
+        const txt = document.getElementById('rulesEditor').value;
+        const blob = new Blob([txt], { type: "text/plain;charset=utf-8" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `all_rules_custom_${getFullTimestamp()}.txt`;
+        a.click();
+    }
+
+    /* ================= 5. 多源批次讀取與智慧防亂碼解碼 ================= */
+    function smartDecode(buffer) {
+        const encodings = ['utf-8', 'gbk', 'big5'];
+        for (let enc of encodings) {
+            try {
+                const decoder = new TextDecoder(enc, { fatal: true });
+                const text = decoder.decode(buffer);
+                if (!text.includes('\uFFFD')) return { text, encoding: enc };
+            } catch (e) {}
+        }
+        return { text: new TextDecoder('utf-8').decode(buffer), encoding: 'utf-8' };
+    }
+
+    function setupDragAndDrop() {
+        const dropZone = document.getElementById('dropZone');
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(ev => {
+            dropZone.addEventListener(ev, e => { e.preventDefault(); e.stopPropagation(); }, false);
+        });
+        ['dragenter', 'dragover'].forEach(ev => {
+            dropZone.addEventListener(ev, () => dropZone.classList.add('highlight'), false);
+        });
+        ['dragleave', 'drop'].forEach(ev => {
+            dropZone.addEventListener(ev, () => dropZone.classList.remove('highlight'), false);
+        });
+        dropZone.addEventListener('drop', e => {
+            handleFiles(e.dataTransfer.files);
+        }, false);
+    }
+
+    async function handleFiles(files) {
+        if (!files || !files.length) return;
+        let combined = "";
+        for (let f of Array.from(files)) {
+            const buf = await f.arrayBuffer();
+            const decoded = smartDecode(buf);
+            combined += (combined ? "\n" : "") + decoded.text.trim();
+            addLog(`載入檔案: ${f.name} (${decoded.encoding})`, "success");
+        }
+        loadIntoSource(combined);
+    }
+
+    async function batchFetchUrls() {
+        const urlStr = document.getElementById('urlInput').value.trim();
+        const urls = urlStr.split(/\r?\n/).map(u => u.trim()).filter(u => u);
+        if (!urls.length) return alert("請先輸入至少一個遠端網址！");
+
+        saveSessionData();
+        addLog(`開始批次讀取 ${urls.length} 個遠端來源...`, "primary");
+        let combined = "";
+        const proxies = [
+            "",
+            "https://corsproxy.io/?",
+            "https://api.allorigins.win/raw?url="
+        ];
+
+        for (let i = 0; i < urls.length; i++) {
+            const url = urls[i];
+            let success = false;
+            addLog(`⏳ [${i + 1}/${urls.length}] 讀取: ${url.substring(0, 50)}...`);
+
+            for (let pIdx = 0; pIdx < proxies.length; pIdx++) {
+                const target = pIdx === 0 ? url : proxies[pIdx] + encodeURIComponent(url);
+                try {
+                    const res = await fetch(target);
+                    if (res.ok) {
+                        const buf = await res.arrayBuffer();
+                        const decoded = smartDecode(buf);
+                        combined += (combined ? "\n" : "") + decoded.text.trim();
+                        addLog(`✅ 成功 (${decoded.encoding}): ${url.split('/').pop() || 'Remote'}`, "success");
+                        success = true;
+                        break;
+                    }
+                } catch (e) {}
+            }
+            if (!success) {
+                addLog(`❌ 代理被拒，自動開啟獨立下載視窗: ${url}`, "error");
+                window.open(url, '_blank');
+            }
+        }
+        if (combined) {
+            loadIntoSource(combined);
+            addLog("遠端來源合併並分析完成！", "success");
+        }
+    }
+
+    async function pasteFromClipboard() {
+        try {
+            const text = await navigator.clipboard.readText();
+            if (!text) return addLog("剪貼簿為空", "warning");
+            loadIntoSource(text);
+            addLog("已從剪貼簿載入並完成分類。", "success");
+        } catch (err) {
+            alert("無法自動讀取剪貼簿，請在左側編輯框按 Ctrl+V 貼上。");
+        }
+    }
+
+    /* ================= 6. 前處理 (斷行修復 & 繁簡轉換) ================= */
+    function preprocessRawText(rawText) {
+        let content = String(rawText || "");
+        if (document.getElementById('fixLines').checked) {
+            const lines = content.split(/\r?\n/).map(l => l.trim()).filter(l => l);
+            let merged = [];
+            for (let i = 0; i < lines.length; i++) {
+                if (
+                    i < lines.length - 1 &&
+                    !lines[i].startsWith("#") &&
+                    !lines[i].includes("://") &&
+                    !lines[i].endsWith("#genre#") &&
+                    (lines[i + 1].includes("://") || lines[i + 1].startsWith(","))
+                ) {
+                    let next = lines[i + 1].startsWith(",") ? lines[i + 1] : "," + lines[i + 1];
+                    merged.push(lines[i] + next);
+                    i++;
+                } else {
+                    merged.push(lines[i]);
+                }
+            }
+            content = merged.join("\n");
+        }
+        if (document.getElementById('autoTW').checked) {
+            content = toTW(content);
+            currentLangMode = 'tw';
+            updateLangBtnUI();
+        }
+        return content;
+    }
+
+    function loadIntoSource(rawText) {
+        document.getElementById('sourceArea').value = preprocessRawText(rawText);
+        saveSessionData();
+        runAnalyze();
+    }
+
+    function formatSourceInput() {
+        const cur = document.getElementById('sourceArea').value;
+        if (!cur.trim()) return;
+        loadIntoSource(cur);
+        addLog("已執行斷行修復與台灣繁體化。", "success");
+    }
+
+    function onSourceInput() {
+        saveSessionData();
+        runAnalyze();
+    }
+
+    function toggleLanguage() {
+        const sArea = document.getElementById('sourceArea');
+        if (!sArea.value.trim()) return;
+        if (currentLangMode === 'tw') {
+            sArea.value = toCN(sArea.value);
+            currentLangMode = 'cn';
+            addLog("已切換為：簡體中文模式", "warning");
+        } else {
+            sArea.value = toTW(sArea.value);
+            currentLangMode = 'tw';
+            addLog("已切換為：台灣繁體模式", "success");
+        }
+        updateLangBtnUI();
+        runAnalyze();
+    }
+
+    function updateLangBtnUI() {
+        const btn = document.getElementById('langBtn');
+        if (currentLangMode === 'tw') {
+            btn.innerText = "🔄 切換為簡體";
+            btn.className = "btn-orange";
+        } else {
+            btn.innerText = "🔄 切換為繁體";
+            btn.className = "btn-dark";
+        }
+    }
+
+    /* ================= 7. 混合式 M3U + TXT 解析與格式檢驗器 ================= */
+    function parseHybridContent(text) {
+        const out = [], iss = [];
+        const lines = String(text || "").replace(/\r/g, "").split("\n");
+        let curExt = null;
+        let currentGenre = "";
+
+        lines.forEach((raw, idx) => {
+            const l = raw.trim();
+            const lineNum = idx + 1;
+            if (!l || l.startsWith("//")) return;
+
+            // 1. #EXTINF 標籤行
+            if (l.startsWith("#EXTINF")) {
+                if (curExt) {
+                    iss.push({ t: "bad", m: `第 ${curExt.line} 行「${curExt.name}」後面缺少播放網址` });
+                }
+                const attrs = {};
+                l.replace(/([\w-]+)="([^"]*)"/g, (_, k, v) => attrs[k.toLowerCase()] = v);
+                const name = (l.includes(",") ? l.slice(l.lastIndexOf(",") + 1) : "").trim() || attrs["tvg-name"] || "";
+                curExt = {
+                    line: lineNum,
+                    name,
+                    group: attrs["group-title"] || currentGenre || "",
+                    country: attrs["tvg-country"] || "",
+                    logo: attrs["tvg-logo"] || "",
+                    id: attrs["tvg-id"] || "",
+                    attrs
+                };
+                if (!name) iss.push({ t: "warn", m: `第 ${lineNum} 行 #EXTINF 頻道名稱為空` });
+                return;
+            }
+
+            // 2. 其他 # 註解或 #EXTM3U
+            if (l.startsWith("#")) return;
+
+            // 3. TXT 分類標題行 (例如: 新聞臺,#genre#)
+            const genreMatch = l.match(/^(.*?),\s*#genre#\s*$/i);
+            if (genreMatch) {
+                currentGenre = genreMatch[1].trim();
+                return;
+            }
+
+            // 4. 若前一行為 #EXTINF，此行應為 URL
+            if (curExt && !l.includes(",#genre#")) {
+                // 若這行本身又是「頻道名,網址」格式，代表上一個 #EXTINF 缺網址
+                const txtPairMatch = l.match(/^([^,]+),\s*((?:https?|rtmp|rtsp|udp|rtp|mms|mitv|p2p):\/\/.*)$/i);
+                if (txtPairMatch && !/^(https?|rtmp|rtsp|udp|rtp|mms):\/\//i.test(l)) {
+                    iss.push({ t: "bad", m: `第 ${curExt.line} 行「${curExt.name}」缺少網址，第 ${lineNum} 行已改按 TXT 解析` });
+                    curExt = null;
+                } else {
+                    if (!/^(https?|rtmp|rtsp|udp|rtp|mms|mitv|p2p):\/\//i.test(l)) {
+                        iss.push({ t: "bad", m: `第 ${lineNum} 行「${curExt.name}」網址協定不正確: ${l.slice(0, 60)}` });
+                    }
+                    curExt.url = l;
+                    out.push(curExt);
+                    curExt = null;
+                    return;
+                }
+            }
+
+            // 5. 純文字「頻道名稱,網址」行
+            const m = l.match(/^(.*?),\s*((?:https?|rtmp|rtsp|udp|rtp|mms|mitv|p2p):\/\/.*)$/i);
+            if (m) {
+                const name = m[1].trim();
+                const url = m[2].trim();
+                if (!name) iss.push({ t: "warn", m: `第 ${lineNum} 行頻道名稱為空` });
+                out.push({
+                    line: lineNum,
+                    name,
+                    group: currentGenre,
+                    country: "",
+                    logo: "",
+                    id: "",
+                    attrs: {},
+                    url
+                });
+            } else if (/^(https?|rtmp|rtsp|udp|rtp|mms):\/\//i.test(l)) {
+                iss.push({ t: "bad", m: `第 ${lineNum} 行有孤立網址但缺少 #EXTINF 或頻道名稱: ${l.slice(0, 50)}` });
+            } else if (l.includes(",")) {
+                iss.push({ t: "bad", m: `第 ${lineNum} 行網址格式無法辨識: ${l.slice(0, 60)}` });
+            } else {
+                iss.push({ t: "warn", m: `第 ${lineNum} 行無法辨識 (非有效 M3U 或 TXT 行): ${l.slice(0, 45)}` });
+            }
+        });
+
+        if (curExt) {
+            iss.push({ t: "bad", m: `最後一筆「${curExt.name}」後面沒有播放網址` });
+        }
+        return { out, iss };
+    }
+
+    /* ================= 8. 四階段高階語義分類與台灣注音排序 ================= */
+    const catOrder = () => [...new Set([...RULES.cats.map(x => x.name), "other"])];
+    const catIdx = n => {
+        const i = catOrder().indexOf(n);
+        return i < 0 ? 999 : i;
+    };
+
+    function twHeuristic(c) {
+        const hay = (c.name + " " + c.group + " " + c.id).toLowerCase();
+        return /^TW$/i.test(c.country) ||
+               /台灣|台湾|Taiwan|\bTW\b/i.test(c.group) ||
+               TW_KW.some(k => hay.includes(k.toLowerCase()));
+    }
+
+    function classifyChannel(c) {
+        const n = nrm(c.name);
+        const useSpec = document.getElementById('optSpec').checked;
+        const useBuiltinTw = document.getElementById('optBuiltinTw').checked || !RULES.keep.length;
+        const keepAllMode = document.getElementById('optKeepAll').checked;
+
+        c.mod = MOD_RE.test(c.name + " " + c.group) || MOD_RE.test(c.url || "");
+        c.keep = RULES.keep.some(k => n.includes(k));
+        c.excl = RULES.excl.some(k => n.includes(k));
+        c.blacklisted = document.getElementById('useBlacklist').checked && invalidSet.has(c.url);
+
+        if (c.blacklisted) {
+            c.tw = false;
+            c.unkeepReason = "黑名單網址";
+        } else if (c.excl) {
+            c.tw = false;
+            c.unkeepReason = "命中 EXCLUDE_LIST";
+        } else if (keepAllMode) {
+            c.tw = true;
+        } else {
+            c.tw = c.keep || c.mod || (useBuiltinTw && twHeuristic(c));
+            if (!c.tw) c.unkeepReason = "不在 KEEP_LIST";
+        }
+
+        // Stage 1: CATEGORY_LIST (支援更具體關鍵字優先 spec)
+        c.cat = "other";
+        let best = null;
+        for (const g of RULES.cats) {
+            const ms = g.kws.filter(k => n.includes(k));
+            if (!ms.length) continue;
+            if (!best) {
+                best = { g, ms };
+            } else if (useSpec && ms.some(k => best.ms.some(b => b !== k && k.includes(b)))) {
+                best = { g, ms };
+            }
+        }
+        if (best) c.cat = best.g.name;
+
+        // Stage 2: OVERRIDE_LIST 強制覆寫
+        const ov = RULES.over.find(g => g.kws.some(k => n.includes(k)));
+        if (ov) c.cat = ov.name;
+
+        // Stage 3: PREFIX_LIST 字首優先 (剝除前綴數字與括號，並檢查 !例外分類)
+        const nn = n.replace(/^[\d\[\(【「『《<_.·\-]+/, "");
+        const pf = RULES.pre.find(g => g.kws.some(k => nn.startsWith(k)));
+        if (pf && !pf.exc.includes(c.cat)) {
+            c.cat = pf.name;
+        }
+
+        // Stage 4: 計算該分類下的 SORT_LIST 優先權
+        const sl = RULES.sort[c.cat] || [];
+        const prioIdx = sl.findIndex(k => n.includes(k));
+        c.prio = prioIdx < 0 ? 9999 : prioIdx;
+    }
+
+    // 排序比較器：SORT_LIST 優先 -> 數字 -> 英文 -> 台灣注音
+    const normSortKey = n => String(n || "").normalize("NFKC").replace(/^[\s\[\(【「『《<\-_.·]+/, "");
+    const charRank = n => {
+        const c = normSortKey(n)[0] || "";
+        return /[0-9]/.test(c) ? 0 : /[A-Za-z]/.test(c) ? 1 : 2;
+    };
+    const cmpByName = (a, b) => charRank(a.name) - charRank(b.name) || COLL.compare(normSortKey(a.name), normSortKey(b.name));
+    const cmpChannel = (a, b) => (a.prio ?? 9999) - (b.prio ?? 9999) || cmpByName(a, b);
+
+    /* ================= 9. 執行完整分析管線 ================= */
+    function runAnalyze() {
+        const text = document.getElementById('sourceArea').value;
+        if (!text.trim()) {
+            ALL_CHANNELS = [];
+            ISSUES = [];
+            renderAllViews();
+            return;
+        }
+
+        const { out, iss } = parseHybridContent(text);
+        let convCount = 0;
+
+        // 依目前語言模式統一頻道名與原始群組
+        out.forEach(c => {
+            const orig = c.name;
+            if (currentLangMode === 'tw') {
+                c.name = toTW(c.name);
+                c.group = toTW(c.group);
+            } else {
+                c.name = toCN(c.name);
+                c.group = toCN(c.group);
+            }
+            if (c.name !== orig) convCount++;
+        });
+
+        // 去重處理
+        const strictUrl = document.getElementById('strictUrlDedup').checked;
+        let dupCount = 0;
+        const seenKey = new Set();
+        for (let i = 0; i < out.length; i++) {
+            const k = strictUrl ? out[i].url : (nrm(out[i].name) + "|" + out[i].url);
+            if (seenKey.has(k)) {
+                out.splice(i, 1);
+                i--;
+                dupCount++;
+            } else {
+                seenKey.add(k);
+            }
+        }
+
+        // 分類並檢查重複網址 / 同名備援源
+        const seenUrls = new Map();
+        let blackSkipCount = 0;
+        out.forEach(c => {
+            classifyChannel(c);
+            if (c.blacklisted) blackSkipCount++;
+            if (seenUrls.has(c.url)) {
+                iss.push({ t: "warn", m: `共用相同網址:「${c.name}」與「${seenUrls.get(c.url)}」` });
+            } else {
+                seenUrls.set(c.url, c.name);
+            }
+        });
+
+        const keptNameCounts = new Map();
+        out.forEach(c => {
+            if (c.tw) keptNameCounts.set(c.name, (keptNameCounts.get(c.name) || 0) + 1);
+        });
+        keptNameCounts.forEach((cnt, name) => {
+            if (cnt > 1) iss.push({ t: "warn", m: `同名頻道出現 ${cnt} 次:「${name}」(已保留作為備援源)` });
+        });
+
+        ALL_CHANNELS = out;
+        ISSUES = iss;
+        statsMeta = { convCount, dupCount, blackSkipCount };
+
+        // 若目前選取的分類已不存在，重置為全部
+        const availableCats = new Set(ALL_CHANNELS.filter(c => c.tw).map(c => c.cat));
+        if (catFilter !== "全部" && !availableCats.has(catFilter)) {
+            catFilter = "全部";
+        }
+
+        renderAllViews();
+    }
+
+    /* ================= 10. 篩選、渲染與匯出生成 ================= */
+    function displayCatName(cat) {
+        return currentLangMode === 'cn' ? toCN(cat) : cat;
+    }
+
+    function getVisibleKeptChannels() {
+        const q = document.getElementById('searchInput').value.trim().toLowerCase();
+        return ALL_CHANNELS.filter(c =>
+            c.tw &&
+            (scopeFilter === "all" || (scopeFilter === "mod" ? c.mod : !c.mod)) &&
+            (catFilter === "全部" || c.cat === catFilter) &&
+            (!q || c.name.toLowerCase().includes(q) || c.cat.toLowerCase().includes(q))
+        ).sort((a, b) => catIdx(a.cat) - catIdx(b.cat) || cmpChannel(a, b));
+    }
+
+    function getAllKeptSorted() {
+        // 匯出與 TXT/M3U 預覽依目前範圍 (全部保留 / 非 MOD / MOD) 輸出
+        return ALL_CHANNELS.filter(c =>
+            c.tw && (scopeFilter === "all" || (scopeFilter === "mod" ? c.mod : !c.mod))
+        ).sort((a, b) => catIdx(a.cat) - catIdx(b.cat) || cmpChannel(a, b));
+    }
+
+    function getUnkeptSorted() {
+        return ALL_CHANNELS.filter(c => !c.tw).sort(cmpChannel);
+    }
+
+    function buildKeptM3uText() {
+        const list = getAllKeptSorted();
+        if (!list.length) return "";
+        let s = "#EXTM3U\n";
+        list.forEach(c => {
+            const g = displayCatName(c.cat);
+            let attrStr = "";
+            if (c.id) attrStr += ` tvg-id="${c.id}"`;
+            if (c.logo) attrStr += ` tvg-logo="${c.logo}"`;
+            if (c.country) attrStr += ` tvg-country="${c.country}"`;
+            attrStr += ` group-title="${g}"`;
+            s += `#EXTINF:-1${attrStr},${c.name}\n${c.url}\n`;
+        });
+        return s.trim();
+    }
+
+    function buildKeptTxtText() {
+        const list = getAllKeptSorted();
+        if (!list.length) return "";
+        let s = "";
+        let curG = null;
+        list.forEach(c => {
+            const g = displayCatName(c.cat);
+            if (g !== curG) {
+                if (curG !== null) s += "\n";
+                s += `${g},#genre#\n`;
+                curG = g;
+            }
+            s += `${c.name},${c.url}\n`;
+        });
+        return s.trim();
+    }
+
+    function buildUnkeptTxtText() {
+        const list = getUnkeptSorted();
+        if (!list.length) return "";
+        const groups = new Map();
+        list.forEach(c => {
+            const reason = c.unkeepReason || "未保留";
+            if (!groups.has(reason)) groups.set(reason, []);
+            groups.get(reason).push(c);
+        });
+        let s = "";
+        groups.forEach((cs, reason) => {
+            s += `${reason},#genre#\n`;
+            cs.forEach(c => { s += `${c.name},${c.url}\n`; });
+            s += "\n";
+        });
+        return s.trim();
+    }
+
+    function renderAllViews() {
+        const tw = ALL_CHANNELS.filter(c => c.tw);
+        const mod = tw.filter(c => c.mod);
+        const unkept = ALL_CHANNELS.filter(c => !c.tw);
+        const bad = ISSUES.filter(i => i.t === "bad");
+        const warn = ISSUES.filter(i => i.t === "warn");
+
+        // 1. 更新頂部統計與診斷徽章
+        document.getElementById('statTotal').innerText = `總解析: ${ALL_CHANNELS.length}`;
+        document.getElementById('statKept').innerText = `保留: ${tw.length} (MOD ${mod.length})`;
+        document.getElementById('statUnkept').innerText = `未保留: ${unkept.length}`;
+        document.getElementById('statDedup').innerText = `去重: ${statsMeta.dupCount}`;
+        document.getElementById('statBlack').innerText = `黑名單剔除: ${statsMeta.blackSkipCount}`;
+
+        const errEl = document.getElementById('errBadge');
+        const warnEl = document.getElementById('warnBadge');
+        errEl.innerText = `錯誤 ${bad.length}`;
+        errEl.style.color = bad.length ? "var(--error)" : "var(--success)";
+        warnEl.innerText = `警告 ${warn.length}`;
+        warnEl.style.color = warn.length ? "#b45309" : "var(--success)";
+
+        // 2. 渲染範圍膠囊 (Scope Pills)
+        const scopes = [
+            ["all", `全部保留 (${tw.length})`],
+            ["tv", `非 MOD (${tw.length - mod.length})`],
+            ["mod", `MOD (${mod.length})`]
+        ];
+        document.getElementById('scopePills').innerHTML = scopes.map(([k, label]) =>
+            `<button class="pill-btn ${scopeFilter === k ? 'on' : ''}" onclick="setScopeFilter('${k}')">${label}</button>`
+        ).join("");
+
+        // 3. 渲染分類膠囊 (Category Pills)
+        const baseForCat = tw.filter(c => scopeFilter === "all" || (scopeFilter === "mod" ? c.mod : !c.mod));
+        const catCounts = {};
+        baseForCat.forEach(c => catCounts[c.cat] = (catCounts[c.cat] || 0) + 1);
+        const catNames = ["全部", ...catOrder().filter(n => catCounts[n])];
+        document.getElementById('catPills').innerHTML = catNames.map(n => {
+            const label = n === "全部" ? `全部 (${baseForCat.length})` : `${displayCatName(n)} (${catCounts[n]})`;
+            return `<button class="pill-btn ${catFilter === n ? 'on' : ''}" onclick="setCatFilter('${n}')">${label}</button>`;
+        }).join("");
+
+        // 4. 渲染表格視圖
+        const vis = getVisibleKeptChannels();
+        document.getElementById('rightPanelTitle').innerText =
+            `CONVERTED RESULT (目前顯示: ${vis.length} 筆 / 保留總計: ${tw.length} 筆)`;
+
+        const tbody = document.getElementById('resultTableBody');
+        tbody.innerHTML = "";
+        const frag = document.createDocumentFragment();
+        vis.forEach((c, idx) => {
+            const tr = document.createElement('tr');
+            const modTag = c.mod ? `<span class="badge-mod">MOD</span>` : "";
+            const tvgTag = (c.id || c.logo) ? `<span class="badge-tvg" title="tvg-id: ${esc(c.id)} | tvg-logo: ${esc(c.logo)}">TVG</span>` : "";
+            tr.innerHTML = `
+                <td class="col-id">${idx + 1}</td>
+                <td><span class="badge-cat">${esc(displayCatName(c.cat))}</span></td>
+                <td title="${esc(c.name)}">${esc(c.name)}${modTag}${tvgTag}</td>
+                <td title="${esc(c.url)}" style="font-family:Consolas,monospace; color:#555;">${esc(c.url)}</td>
+            `;
+            frag.appendChild(tr);
+        });
+        tbody.appendChild(frag);
+
+        // 5. 渲染文字預覽或診斷視圖
+        if (currentViewMode === 'txt') {
+            document.getElementById('outputArea').value = buildKeptTxtText();
+        } else if (currentViewMode === 'm3u') {
+            document.getElementById('outputArea').value = buildKeptM3uText();
+        } else if (currentViewMode === 'unkept') {
+            document.getElementById('outputArea').value = buildUnkeptTxtText();
+        } else if (currentViewMode === 'diag') {
+            const diagEl = document.getElementById('diagView');
+            let html = `<div style="margin-bottom:10px; font-weight:bold;">
+                📊 解析總計 ${ALL_CHANNELS.length} 筆 | 保留 ${tw.length} 筆 (含 other ${tw.filter(c=>c.cat==='other').length} 筆, MOD ${mod.length} 筆) | 未保留 ${unkept.length} 筆 | 簡轉繁 ${statsMeta.convCount} 筆 | 完全重複剔除 ${statsMeta.dupCount} 筆
+            </div>`;
+            if (!ISSUES.length) {
+                html += `<div style="color:var(--success); font-weight:bold;">✔ 未發現任何格式錯誤或重複警告！</div>`;
+            } else {
+                html += ISSUES.slice(0, 300).map(i =>
+                    `<div class="${i.t === 'bad' ? 'issue-bad' : 'issue-warn'}">• [${i.t === 'bad' ? '錯誤' : '警告'}] ${esc(i.m)}</div>`
+                ).join("");
+                if (ISSUES.length > 300) html += `<div style="color:#666;">... 僅顯示前 300 筆 (共 ${ISSUES.length} 筆)</div>`;
+            }
+            diagEl.innerHTML = html;
+        }
+    }
+
+    function setScopeFilter(s) {
+        scopeFilter = s;
+        catFilter = "全部";
+        renderAllViews();
+    }
+
+    function setCatFilter(c) {
+        catFilter = c;
+        renderAllViews();
+    }
+
+    function switchResultView(mode) {
+        currentViewMode = mode;
+        ['table', 'txt', 'm3u', 'unkept', 'diag'].forEach(m => {
+            const btnId = 'tab' + m.charAt(0).toUpperCase() + m.slice(1) + 'Btn';
+            const el = document.getElementById(btnId);
+            if (el) el.classList.toggle('active', m === mode);
+        });
+
+        document.getElementById('tableView').style.display = (mode === 'table') ? 'block' : 'none';
+        document.getElementById('outputArea').style.display = (mode === 'txt' || mode === 'm3u' || mode === 'unkept') ? 'block' : 'none';
+        document.getElementById('diagView').style.display = (mode === 'diag') ? 'block' : 'none';
+
+        renderAllViews();
+    }
+
+    /* ================= 11. 複製與檔案匯出 ================= */
+    async function copyResultText(ext) {
+        const content = ext === 'm3u' ? buildKeptM3uText() : buildKeptTxtText();
+        if (!content) return alert("目前沒有可複製的保留頻道！");
+        try {
+            await navigator.clipboard.writeText(content);
+            addLog(`已複製保留 ${ext.toUpperCase()} 內容 (共 ${getAllKeptSorted().length} 筆)`, "success");
+        } catch (e) {
+            switchResultView(ext);
+            const out = document.getElementById('outputArea');
+            out.select();
+            document.execCommand('copy');
+            addLog(`已複製保留 ${ext.toUpperCase()} 內容`, "success");
+        }
+    }
+
+    function downloadFile(ext) {
+        const content = ext === 'm3u' ? buildKeptM3uText() : buildKeptTxtText();
+        if (!content) return alert("沒有可匯出的保留頻道資料！");
+        const ts = getFullTimestamp();
+        const scopeSuffix = scopeFilter === 'all' ? '' : `_${scopeFilter.toUpperCase()}`;
+        const blob = new Blob(["\ufeff" + content], { type: ext === 'm3u' ? "audio/x-mpegurl;charset=utf-8" : "text/plain;charset=utf-8" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `taiwan_classified${scopeSuffix}_${ts}.${ext}`;
+        a.click();
+        addLog(`已匯出保留清單: ${a.download} (${getAllKeptSorted().length} 筆)`, "success");
+    }
+
+    function downloadUnclassifiedTxt() {
+        const content = buildUnkeptTxtText();
+        if (!content) return alert("目前沒有被排除或未保留的頻道！");
+        const ts = getFullTimestamp();
+        const blob = new Blob(["\ufeff" + content], { type: "text/plain;charset=utf-8" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `unclassified_${ts}.txt`;
+        a.click();
+        addLog(`已匯出未保留清單: ${a.download} (${getUnkeptSorted().length} 筆)`, "warning");
+    }
+
+    /* ================= 12. 黑名單管理與狀態持久化 ================= */
+    function updateInvalidUI() {
+        document.getElementById('invalidCountHeader').innerText = `🚫 黑名單庫: ${invalidSet.size} 筆`;
+    }
+
+    function loadInvalidData() {
+        const saved = localStorage.getItem('iptv_invalid_urls');
+        if (saved) {
+            try { invalidSet = new Set(JSON.parse(saved)); }
+            catch (e) { invalidSet = new Set(); }
+        }
+        updateInvalidUI();
+    }
+
+    function saveInvalidToStorage() {
+        localStorage.setItem('iptv_invalid_urls', JSON.stringify([...invalidSet]));
+        updateInvalidUI();
+    }
+
+    function exportInvalidUrls() {
+        if (!invalidSet.size) return alert("目前黑名單庫為空！");
+        const blob = new Blob([JSON.stringify([...invalidSet], null, 2)], { type: "application/json" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `invalid_urls_${getFullTimestamp()}.json`;
+        a.click();
+        addLog(`已導出黑名單共 ${invalidSet.size} 筆`, "success");
+    }
+
+    function triggerManualImport() {
+        const t = document.createElement('input');
+        t.type = 'file';
+        t.accept = '.json';
+        t.onchange = e => {
+            const file = e.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = ev => {
+                try {
+                    const list = JSON.parse(ev.target.result);
+                    if (Array.isArray(list)) {
+                        list.forEach(u => invalidSet.add(u));
+                        saveInvalidToStorage();
+                        addLog(`導入黑名單成功，目前庫存: ${invalidSet.size} 筆`, "success");
+                        runAnalyze();
+                    } else alert("JSON 格式需為網址陣列");
+                } catch {
+                    alert("JSON 解析失敗");
+                }
+            };
+            reader.readAsText(file);
+        };
+        t.click();
+    }
+
+    function clearInvalidData() {
+        if (confirm("確定要清空黑名單記憶庫嗎？")) {
+            invalidSet.clear();
+            saveInvalidToStorage();
+            addLog("黑名單記憶庫已清空。", "warning");
+            runAnalyze();
+        }
+    }
+
+    function saveOptions() {
+        localStorage.setItem('iptv_v5_spec', document.getElementById('optSpec').checked);
+        localStorage.setItem('iptv_v5_builtin_tw', document.getElementById('optBuiltinTw').checked);
+        localStorage.setItem('iptv_v5_keep_all', document.getElementById('optKeepAll').checked);
+        localStorage.setItem('iptv_v5_tw', document.getElementById('autoTW').checked);
+        localStorage.setItem('iptv_v5_fix', document.getElementById('fixLines').checked);
+        localStorage.setItem('iptv_v5_strict_dedup', document.getElementById('strictUrlDedup').checked);
+        localStorage.setItem('iptv_v5_black', document.getElementById('useBlacklist').checked);
+    }
+
+    function loadOptions() {
+        document.getElementById('optSpec').checked = localStorage.getItem('iptv_v5_spec') !== 'false';
+        document.getElementById('optBuiltinTw').checked = localStorage.getItem('iptv_v5_builtin_tw') === 'true';
+        document.getElementById('optKeepAll').checked = localStorage.getItem('iptv_v5_keep_all') === 'true';
+        document.getElementById('autoTW').checked = localStorage.getItem('iptv_v5_tw') !== 'false';
+        document.getElementById('fixLines').checked = localStorage.getItem('iptv_v5_fix') !== 'false';
+        document.getElementById('strictUrlDedup').checked = localStorage.getItem('iptv_v5_strict_dedup') === 'true';
+        document.getElementById('useBlacklist').checked = localStorage.getItem('iptv_v5_black') !== 'false';
+    }
+
+    function saveSessionData() {
+        localStorage.setItem('iptv_last_source', document.getElementById('sourceArea').value);
+        localStorage.setItem('iptv_last_url', document.getElementById('urlInput').value);
+    }
+
+    function loadSessionData() {
+        document.getElementById('sourceArea').value = localStorage.getItem('iptv_last_source') || "";
+        document.getElementById('urlInput').value = localStorage.getItem('iptv_last_url') || "";
+    }
+
+    function clearAll() {
+        if (confirm("確定要清除工作區內容與暫存設定嗎？")) {
+            document.getElementById('sourceArea').value = "";
+            document.getElementById('urlInput').value = "";
+            document.getElementById('outputArea').value = "";
+            document.getElementById('resultTableBody').innerHTML = "";
+            ALL_CHANNELS = [];
+            ISSUES = [];
+            localStorage.removeItem('iptv_last_source');
+            localStorage.removeItem('iptv_last_url');
+            renderAllViews();
+            addLog("已清除工作區所有資料。", "warning");
+        }
+    }
+</script>
+</body>
+</html>
